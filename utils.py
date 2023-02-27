@@ -3,6 +3,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
+
 class ConditionalDenseNN(torch.nn.Module):
     """
     An implementation of a simple dense feedforward network taking a context variable, for use in, e.g.,
@@ -33,13 +34,13 @@ class ConditionalDenseNN(torch.nn.Module):
     """
 
     def __init__(
-            self,
-            input_dim,
-            context_dim,
-            hidden_dims,
-            param_dims=[1, 1],
-            deep_injection=True,
-            activation=torch.nn.ReLU(),
+        self,
+        input_dim,
+        context_dim,
+        hidden_dims,
+        param_dims=[1, 1],
+        deep_injection=True,
+        activation=torch.nn.ReLU(),
     ):
         super().__init__()
 
@@ -103,75 +104,12 @@ class ConditionalDenseNN(torch.nn.Module):
             else:
                 return tuple([h[..., s] for s in self.param_slices])
 
-def build_knn(data, k):
-    """
 
-    """
+def build_knn(data, k):
+    """ """
     knn_graph_sparse = kneighbors_graph(data, k, include_self=False)
     knn_graph = knn_graph_sparse.toarray().astype(float)
 
     # Make it symmetric?
 
     return knn_graph
-
-
-class Trajectory:
-    def __init__(self, points, num=100):
-        points = np.array(points)
-        pairs = zip(points, points[1:])
-        distances = []
-        for s, e in pairs:
-            v = e - s
-            d = np.linalg.norm(v)
-            distances.append(d)
-
-        cumulate = np.cumsum(distances)
-
-        self.cumulate = cumulate
-        self.points = points
-
-        self.trajectory_latent, self.trajectory_time, self.close_centroids = self.linspace(num)
-
-    def linspace(self, num=100):
-        total = self.cumulate[-1]
-        times = np.linspace(0, total, num)
-        close_centroids = []
-        res = []
-        i = 0
-        for t in times:
-            while t > self.cumulate[i]:
-                i += 1
-            if i > 0:
-                t = (t - self.cumulate[i - 1]) / (self.cumulate[i] - self.cumulate[i - 1])
-            else:
-                t = t / self.cumulate[i]
-
-            res.append(
-                self.points[i] * (1 - t) + t * self.points[i + 1]
-            )
-            if t < 0.5:
-                close_centroids.append(i)
-            else:
-                close_centroids.append(i+1)
-
-
-        trajectory_latent = np.array(res)
-        trajectory_time = times
-
-        return trajectory_latent, trajectory_time, close_centroids
-
-    def at_percent(self, p):
-        t = p * self.cumulate[-1]
-
-        return self.at_time(t)
-
-    def at_time(self, t):
-        i = 0
-        while t > self.cumulate[i]:
-            i += 1
-        if i > 0:
-            t = (t - self.cumulate[i - 1]) / (self.cumulate[i] - self.cumulate[i - 1])
-        else:
-            t = t / self.cumulate[i]
-
-        return self.points[i] * (1 - t) + t * self.points[i + 1]

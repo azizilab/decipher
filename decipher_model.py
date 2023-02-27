@@ -18,7 +18,7 @@ class DecipherConfig:
     scale_factor: float = 1.0
     prior: str = "normal"
     p_to_z_layers: tuple = (64,)
-    z_to_x_layers: tuple = (256,)
+    z_to_x_layers: tuple = tuple()
     beta: float = 1.0
 
     learning_rate: float = 5e-3
@@ -126,6 +126,14 @@ class Decipher(nn.Module):
                     p = pyro.sample("p", dist.StudentT(5, p_loc, p_scale).to_event(1))
 
         return z_loc, p_loc
+
+    def impute_data(self, x):
+        z_loc,_ = self.guide(x)
+        mu = self.decoder_z_to_x(z_loc)
+        mu = softmax(mu, dim=-1)
+        library_size = x.sum(axis=-1, keepdim=True)
+        return library_size * mu
+
 
     def reconstruct_from_prelatent_numpy(self, p, scale=1.0):
         z_loc, z_scale = self.decoder_p_to_z(p)

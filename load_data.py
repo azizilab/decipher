@@ -5,12 +5,12 @@ import pandas as pd
 
 
 def load_datasets(
-        min_cells=100,
-        min_counts=500,
-        target_sum=10_000,
-        subsample=None,
-        seed=0,
-        datasets_to_load=None,
+    min_cells=100,
+    min_counts=500,
+    target_sum=10_000,
+    subsample=None,
+    seed=0,
+    datasets_to_load=None,
 ):
     """
     subsample: dict[dataset_name: target cells]
@@ -25,21 +25,21 @@ def load_datasets(
         "tet2_p1": "data/tet2/16H008_allsorted_cleaned.h5",
         "tet2_p2": "data/tet2/10H072_allsorted_cleaned.h5",
         "tet2_p3": "data/tet2/AML7_allsorted_cleaned.h5",
-        "dnm_07H009": 'data/dnm/DNMT3A _cohort_07H009_unsorted_cohortlevel_annotations.h5',
-        "dnm_09H058": 'data/dnm/DNMT3A _cohort_09H058_unsorted_cohortlevel_annotations.h5',
-        "dnm_10H056": 'data/dnm/DNMT3A _cohort_10H056_unsorted_cohortlevel_annotations.h5',
-        "dnm_11H240": 'data/dnm/DNMT3A _cohort_11H240_unsorted_cohortlevel_annotations.h5',
-        "dnm_12H007": 'data/dnm/DNMT3A _cohort_12H007_unsorted_cohortlevel_annotations.h5',
+        "dnm_07H009": "data/dnm/DNMT3A _cohort_07H009_unsorted_cohortlevel_annotations.h5",
+        "dnm_09H058": "data/dnm/DNMT3A _cohort_09H058_unsorted_cohortlevel_annotations.h5",
+        "dnm_10H056": "data/dnm/DNMT3A _cohort_10H056_unsorted_cohortlevel_annotations.h5",
+        "dnm_11H240": "data/dnm/DNMT3A _cohort_11H240_unsorted_cohortlevel_annotations.h5",
+        "dnm_12H007": "data/dnm/DNMT3A _cohort_12H007_unsorted_cohortlevel_annotations.h5",
         # "dnm_09H058_sorted": 'data/dnm/DNMT3A _cohort_09H058_cohortlevel_annotations.h5',
         # "dnm_10H056_sorted": 'data/dnm/DNMT3A _cohort_10H056_cohortlevel_annotations.h5',
         # "dnm_11H240_sorted": 'data/dnm/DNMT3A _cohort_11H240_cohortlevel_annotations.h5',
         # "dnm_12H007_sorted": 'data/dnm/DNMT3A _cohort_12H007_cohortlevel_annotations.h5',
         # "dnm_12H010_sorted": 'data/dnm/DNMT3A _cohort_12H010_cohortlevel_annotations.h5',
-        "dnm_09H058_sorted": 'data/DNM_sorted_patients/09H058_cohortlevel_annotations.h5',
-        "dnm_10H056_sorted": 'data/DNM_sorted_patients/10H056_cohortlevel_annotations.h5',
-        "dnm_11H240_sorted": 'data/DNM_sorted_patients/11H240_cohortlevel_annotations.h5',
-        "dnm_12H007_sorted": 'data/DNM_sorted_patients/12H007_cohortlevel_annotations.h5',
-        "dnm_12H010_sorted": 'data/DNM_sorted_patients/12H010_cohortlevel_annotations.h5',
+        "dnm_09H058_sorted": "data/DNM_sorted_patients/09H058_cohortlevel_annotations.h5",
+        "dnm_10H056_sorted": "data/DNM_sorted_patients/10H056_cohortlevel_annotations.h5",
+        "dnm_11H240_sorted": "data/DNM_sorted_patients/11H240_cohortlevel_annotations.h5",
+        "dnm_12H007_sorted": "data/DNM_sorted_patients/12H007_cohortlevel_annotations.h5",
+        "dnm_12H010_sorted": "data/DNM_sorted_patients/12H010_cohortlevel_annotations.h5",
     }
     cell_type_column = {
         "healthy": "cell_type",
@@ -122,7 +122,9 @@ def load_datasets(
         for name, data in datasets.items():
             datasets[name] = data[:, gene_intersection]
             if name in subsample:
-                scanpy.pp.subsample(datasets[name], n_obs=min(subsample[name], datasets[name].n_obs), random_state=seed)
+                scanpy.pp.subsample(
+                    datasets[name], n_obs=min(subsample[name], datasets[name].n_obs), random_state=seed
+                )
 
     # Combine the dataset
     if target_sum is not None and target_sum > 0:
@@ -143,38 +145,38 @@ def load_datasets(
 
 
 palette_original = {
-    "immature": '#8c564b',
-    "blast0": '#1f77b4',
-    "blast1": '#ff7f0e',
-    "blast2": '#2ca02c',
-    "blast3": '#d62728',
-
-    "ery": '#9467bd',
-    "lympho": '#e377c2',
-    "mep": '#bcbd22',
-    "N/A": '#DEDEDE',
-    "immature_myelo": '#17becf',  # #DC9E6E
-
+    "immature": "#8c564b",
+    "blast0": "#1f77b4",
+    "blast1": "#ff7f0e",
+    "blast2": "#2ca02c",
+    "blast3": "#d62728",
+    "ery": "#9467bd",
+    "lympho": "#e377c2",
+    "mep": "#bcbd22",
+    "N/A": "#DEDEDE",
+    "immature_myelo": "#17becf",  # #DC9E6E
     "healthy": "#1f77b4",
     "p89": "#ff7f0e",
     "tet2_p1": "#ff7f0e",
     "tet2_p2": "#ff7f0e",
     "tet2_p3": "#ff7f0e",
+    "AML1": "#9357e2",
+    "AML2": "#9357e2",
+    "AML3": "#9357e2",
+    "Healthy": "#a6e257",
 }
 
 palette = {
-    "immature": '#b96d40',
-    "blast0": '#ffcf9c',
-    "blast1": '#4BC4C6',
-    "blast2": '#622450',
-    "blast3": '#ca054d',
-
-    "ery": '#5b6c5d',
-    "lympho": '#FAE500',
-    "mep": '#c472d9',
-    "N/A": '#DEDEDE',
-    "immature_myelo": '#96A360',  # #DC9E6E
-
+    "immature": "#b96d40",
+    "blast0": "#ffcf9c",
+    "blast1": "#4BC4C6",
+    "blast2": "#622450",
+    "blast3": "#ca054d",
+    "ery": "#5b6c5d",
+    "lympho": "#FAE500",
+    "mep": "#c472d9",
+    "N/A": "#DEDEDE",
+    "immature_myelo": "#96A360",  # #DC9E6E
     "healthy": "#3ECD51",
     "p89": "#D44E4E",
     "tet2_p1": "#D44E4E",
@@ -201,10 +203,15 @@ def t_test_deg(adata, n_genes_per_cluster, seed=0):
     # adata.uns["PhenoGraph_Q"] = Q
     sc.pp.neighbors(adata, n_neighbors=10, n_pcs=40, random_state=seed)
     sc.tl.leiden(adata, random_state=seed)
-    adata.obs["PhenoGraph_clusters"] = pd.Categorical(adata.obs['leiden'])
+    adata.obs["PhenoGraph_clusters"] = pd.Categorical(adata.obs["leiden"])
 
     adata_log = scanpy.pp.log1p(adata, copy=True)
-    scanpy.tl.rank_genes_groups(adata_log, "PhenoGraph_clusters", method="t-test", key_added="t-test", )
+    scanpy.tl.rank_genes_groups(
+        adata_log,
+        "PhenoGraph_clusters",
+        method="t-test",
+        key_added="t-test",
+    )
 
     ttest = pd.DataFrame()
     for i in np.unique(adata.obs["PhenoGraph_clusters"]):
@@ -225,7 +232,7 @@ T_CELLS = ["CD3D", "CD3E"]
 PROLI_MARKERS = ["MKI67", "PCNA"]
 ERYTHROID = ["HBB", "HBD", "HBM", "HBA1", "HBA2", "ALAS2", "SOX6", "GATA1"]
 OTHERS = ["AVP", "PROM1", "NPM1", "RUNX1", "SCLT1", "LMO2", "BMI1", "GATA2", "NOTCH2"]
-OTHERS.extend(["SLFN13", "TNFSF10", 'HOXA9', 'MEIS1', 'HHEX', 'CXCL3', 'EEF2', 'CD37', 'BTF3', 'EIF3F'])
+OTHERS.extend(["SLFN13", "TNFSF10", "HOXA9", "MEIS1", "HHEX", "CXCL3", "EEF2", "CD37", "BTF3", "EIF3F"])
 MARKER_GENES = sorted(
     set().union(MYELOID, NK, MACROPHAGE, MONOCYTES, B_CELLS, HSC, T_CELLS, PROLI_MARKERS, ERYTHROID, OTHERS)
 )
