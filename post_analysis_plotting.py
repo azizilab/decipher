@@ -104,12 +104,13 @@ def plot_gene_patterns(
     ):
         if torch.is_tensor(gene_pattern):
             gene_pattern = gene_pattern.detach().numpy()
+        if len(gene_pattern.shape) == 2:
+            gene_pattern = gene_pattern[None, :, :]
 
         gene_pattern_mean = gene_pattern[:, :, gene_id].mean(axis=0)
+        gene_pattern_mean = moving_average(gene_pattern_mean, 5)
         gene_pattern_q25 = np.quantile(gene_pattern[:, :, gene_id], 0.25, axis=0)
         gene_pattern_q75 = np.quantile(gene_pattern[:, :, gene_id], 0.75, axis=0)
-
-        gene_pattern_mean = moving_average(gene_pattern_mean, 5)
         gene_pattern_q25 = moving_average(gene_pattern_q25, 5)
         gene_pattern_q75 = moving_average(gene_pattern_q75, 5)
 
