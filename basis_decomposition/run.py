@@ -17,19 +17,33 @@ import seaborn as sns
 
 
 def compute_basis_decomposition(
-    gene_patterns, inference_mode, n_basis=5, lr=1e-3, n_iter=10_000, show_basis=False
+    gene_patterns,
+    inference_mode,
+    n_basis=5,
+    lr=1e-3,
+    n_iter=10_000,
+    show_basis=False,
+    beta_l1_strength=1.0,
+    seed=0,
+    normalized_mode=True,
 ):
-    model = TrajectoryModel(n_basis, n_genes=gene_patterns.shape[1], n_conditions=gene_patterns.shape[0])
+    gene_patterns = torch.FloatTensor(gene_patterns)
+    model = TrajectoryModel(
+        n_basis,
+        n_genes=gene_patterns.shape[1],
+        n_conditions=gene_patterns.shape[0],
+        beta_l1_strength=beta_l1_strength,
+        normalized_mode=normalized_mode,
+    )
     guide = get_inference_guide(model, inference_mode)
     adam = pyro.optim.Adam({"lr": lr})
     svi = SVI(model, guide, adam, loss=Trace_ELBO())
 
     pyro.clear_param_store()
-    pyro.set_rng_seed(0)
+    pyro.set_rng_seed(seed)
     num_iterations = n_iter
     times = torch.FloatTensor(np.linspace(-10, 10, gene_patterns.shape[-1]))
 
-    start_time = time.time()
     for j in range(num_iterations):
         # calculate the loss and take a gradient step
         loss = svi.step(times, gene_patterns)
@@ -51,7 +65,9 @@ def compute_basis_decomposition(
                 plot_basis(model, guide, gene_patterns, times)
 
     model.return_basis = False
-    predictive = Predictive(model, guide=guide, num_samples=10, return_sites=("beta", "_RETURN", "obs"))
+    predictive = Predictive(
+        model, guide=guide, num_samples=10, return_sites=("beta", "_RETURN", "obs")
+    )
     samples = predictive(times, gene_patterns)
     samples = summary(samples)
     return model, guide, times, samples
@@ -63,7 +79,9 @@ def main():
     gene_expression = torch.FloatTensor(gene_expression).unsqueeze(0)
     times = torch.FloatTensor(times)
 
-    model = TrajectoryModel(10, n_genes=gene_expression.shape[1], n_conditions=gene_expression.shape[0])
+    model = TrajectoryModel(
+        10, n_genes=gene_expression.shape[1], n_conditions=gene_expression.shape[0]
+    )
     guide = get_inference_guide(model, InferenceMode.GAUSSIAN_BETA_ONLY)
 
     adam = pyro.optim.Adam({"lr": 1e-3})
@@ -115,18 +133,30 @@ def main():
         # plots(model, guide, clusters, times, gene_expression, max(clusters) + 1)
 
 
-def plot_basis(model, guide, gene_patterns, times):
+def plot_basis(model, guide, gene_patterns, times, colors=None):
     model.return_basis = True
-    predictive = Predictive(model, guide=guide, num_samples=2, return_sites=("beta", "_RETURN", "obs"))
+    predictive = Predictive(
+        model, guide=guide, num_samples=2, return_sites=("beta", "_RETURN", "obs")
+    )
     samples = predictive(times, gene_patterns)
     samples = summary(samples)
     bases = samples["_RETURN"]["mean"].detach().numpy()
-    plt.plot(bases)
-    plt.show()
+    for i in range(bases.shape[1]):
+        plt.plot(
+            bases[:, i],
+            c=colors[i] if colors is not None else None,
+            label="basis %d" % i,
+            linewidth=3,
+        )
+    # plt.legend()
+    return bases
+
 
 def plots(model, guide, true_clusters, times, gene_expression, n_clusters):
     model.return_basis = False
-    predictive = Predictive(model, guide=guide, num_samples=50, return_sites=("beta", "_RETURN", "obs"))
+    predictive = Predictive(
+        model, guide=guide, num_samples=50, return_sites=("beta", "_RETURN", "obs")
+    )
     samples = predictive(times, gene_expression)
     samples = summary(samples)
 
@@ -151,7 +181,9 @@ def evaluate(model, guide, true_clusters, times, gene_expression, n_clusters):
 
     plt.figure(dpi=200)
     sns.heatmap(
-        np.exp(-((betas[:, None, :] - betas[None, :, :]) ** 2 / ((betas ** 2).mean() * 2)).sum(axis=2)),
+        np.exp(
+            -((betas[:, None, :] - betas[None, :, :]) ** 2 / ((betas ** 2).mean() * 2)).sum(axis=2)
+        ),
         cmap="viridis",
         yticklabels=False,
         xticklabels=False,

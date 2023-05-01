@@ -25,7 +25,9 @@ def get_inference_guide(model, inference_mode):
             )
         )
         guide.append(
-            pyro.infer.autoguide.AutoNormal(pyro.poutine.block(model, expose=["beta"]), init_scale=0.2)
+            pyro.infer.autoguide.AutoNormal(
+                pyro.poutine.block(model, expose=["beta"]), init_scale=0.2
+            )
         )
 
     # 3) basis only have uncertainty
