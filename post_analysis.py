@@ -76,6 +76,7 @@ def rotate_decipher_space(
     adata,
     label,
     decipher_component_to_align_label_with=1,
+    flip_decipher_1=False,
     flip_latent_z=False,
 ):
 
@@ -94,7 +95,11 @@ def rotate_decipher_space(
 
     best_t = max(rot_scores)[1]
 
-    adata.obsm["decipher_v_corrected"] = adata.obsm["decipher_v"] @ rot(best_t)
+    rotation = rot(best_t)
+    if flip_decipher_1:
+        rotation = rotation @ np.array([[-1,0], [0,1]])
+    adata.obsm["decipher_v_corrected"] = adata.obsm["decipher_v"] @ rotation
+
 
     if flip_latent_z:
         # We want z to be correlated positively with the components
@@ -107,7 +112,7 @@ def rotate_decipher_space(
         z_sign_correction = 1.0
 
     adata.obsm["decipher_z_corrected"] = adata.obsm["decipher_z"] * z_sign_correction
-    adata.uns["decipher_rotation"] = best_t
+    adata.uns["decipher_rotation"] = rotation
 
 
 def cluster_representations(adata, leiden_resolution=1.0, seed=0):
@@ -185,10 +190,10 @@ def compute_trajectories(
 
     return trajectory
 
-def compute_decipher_time(adata, trajectories):
+def compute_decipher_time(adata, trajectories, n_neighbors=10):
     from sklearn.neighbors import KNeighborsRegressor
     adata.obs["origin_cat"] = adata.obs["origin"].astype("category")
-    knn = KNeighborsRegressor(n_neighbors=5)
+    knn = KNeighborsRegressor(n_neighbors=n_neighbors)
     Xs = []
     Ts = []
     for origin in trajectories:
@@ -203,10 +208,11 @@ def compute_decipher_time(adata, trajectories):
     Xt[:, 2] = adata.obs["origin_cat"].cat.codes.values*1000
     adata.obs["decipher_time"] = knn.predict(Xt)
 
+
 def sample_from_decipher_trajectory(adata, model, trajectory_latent, l_scale=10_000, n_samples=5, smooth=0, return_mean=False):
     if "decipher_rotation" in adata.uns:
         # need to undo rotation of the decipher_v_corrected space
-        trajectory_latent = trajectory_latent @ rot(-adata.uns["decipher_rotation"])
+        trajectory_latent = trajectory_latent @ np.linalg.inv(adata.uns["decipher_rotation"])
 
     trajectory_latent = torch.FloatTensor(trajectory_latent)
     z_mean, z_scale = model.decoder_p_to_z(trajectory_latent)

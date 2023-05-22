@@ -11,6 +11,7 @@ def plot_decipher_v(
     show_axis="arrow",
     figsize=(3.5, 3.5),
     palette=None,
+    subsample_frac=1.0,
     basis="decipher_v_corrected",
         x_label="Decipher 1",
         y_label="Decipher 2",
@@ -19,7 +20,7 @@ def plot_decipher_v(
     with plt.rc_context({"figure.figsize": figsize}):
 
         fig = sc.pl.embedding(
-            adata,
+            sc.pp.subsample(adata, subsample_frac, copy=True),
             basis=basis,
             color=color,
             palette=palette,
@@ -27,9 +28,9 @@ def plot_decipher_v(
             frameon=(show_axis != "no"),
             **kwargs
         )
-
     ax = fig.axes[0]
-    ax.set_title(title)
+    if type(color) == str or len(color) == 1:
+        ax.set_title(title)
 
     if show_axis == "arrow":
         ax.spines["top"].set_visible(False)
@@ -77,6 +78,8 @@ def plot_gene_patterns(
     gene_id = adata.var_names.tolist().index(gene_name)
 
     def moving_average(x, w):
+        if len(x.shape) == 2:
+            return np.stack([moving_average(xx, w) for xx in x])
         return np.convolve(x, np.ones(w), "valid") / w
 
     if type(gene_patterns) != list:
@@ -107,12 +110,14 @@ def plot_gene_patterns(
         if len(gene_pattern.shape) == 2:
             gene_pattern = gene_pattern[None, :, :]
 
-        gene_pattern_mean = gene_pattern[:, :, gene_id].mean(axis=0)
-        gene_pattern_mean = moving_average(gene_pattern_mean, 5)
-        gene_pattern_q25 = np.quantile(gene_pattern[:, :, gene_id], 0.25, axis=0)
-        gene_pattern_q75 = np.quantile(gene_pattern[:, :, gene_id], 0.75, axis=0)
-        gene_pattern_q25 = moving_average(gene_pattern_q25, 5)
-        gene_pattern_q75 = moving_average(gene_pattern_q75, 5)
+        gene_pattern = gene_pattern[:, :, gene_id]
+        gene_pattern = moving_average(gene_pattern, 5)
+        gene_pattern_mean = gene_pattern.mean(axis=0)
+        # gene_pattern_mean = moving_average(gene_pattern_mean, 5)
+        gene_pattern_q25 = np.quantile(gene_pattern, 0.25, axis=0)
+        gene_pattern_q75 = np.quantile(gene_pattern, 0.75, axis=0)
+        # gene_pattern_q25 = moving_average(gene_pattern_q25, 5)
+        # gene_pattern_q75 = moving_average(gene_pattern_q75, 5)
 
         x = trajectory.trajectory_time[2:-2]
         if crop_to_equal_length:
@@ -134,7 +139,7 @@ def plot_gene_patterns(
             gene_pattern_mean,
             label=label,
             color=color,
-            linewidth=4,
+            linewidth=3,
         )
 
     plt.xticks([])
