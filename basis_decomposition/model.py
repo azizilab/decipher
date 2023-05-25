@@ -45,7 +45,7 @@ class RealFunction(pyro.nn.PyroModule):
 
 
 class TrajectoryModel(torch.nn.Module):
-    def __init__(self, K, n_genes, n_conditions=2, beta_l1_strength=1.0, normalized_mode=True):
+    def __init__(self, K, n_genes, n_conditions=2, beta_prior=1.0, normalized_mode=True):
         super().__init__()
         self.K = K
         self.normalized_mode = normalized_mode
@@ -56,7 +56,7 @@ class TrajectoryModel(torch.nn.Module):
         self.n_conditions = n_conditions
         self.n_genes = n_genes
         self.K = K
-        self.beta_l1_strength = beta_l1_strength
+        self.beta_prior = beta_prior
 
         self.return_basis = True
 
@@ -71,19 +71,24 @@ class TrajectoryModel(torch.nn.Module):
     def forward(self, times, data):
         basis = self.get_basis(times)
 
-        betas = pyro.sample(
-            "beta",
-            dist.Exponential(self.beta_l1_strength)
-            .expand([self.n_conditions, self.n_genes, self.K])
-            .to_event(3),
-        )
-        if self.normalized_mode:
-            betas = torch.softmax(betas, dim=-1)
+        if not self.normalized_mode:
+            betas = pyro.sample(
+                "beta",
+                dist.Exponential(self.beta_prior)
+                .expand([self.n_conditions, self.n_genes, self.K])
+                .to_event(3),
+            )
+            std = 0.1
+        else:
+            betas = pyro.sample(
+                "beta",
+                dist.Dirichlet(torch.ones(self.K)*self.beta_prior)
+                    .expand([self.n_conditions, self.n_genes])
+                    .to_event(2),
+            )
             gene_scales = self.gene_scales.unsqueeze(-1)
             betas = betas * gene_scales
             std = self.std * gene_scales
-        else:
-            std = 0.1
 
         trajectories = torch.einsum("cgk, tk -> cgt", betas, basis)
 

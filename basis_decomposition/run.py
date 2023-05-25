@@ -23,16 +23,17 @@ def compute_basis_decomposition(
     lr=1e-3,
     n_iter=10_000,
     show_basis=False,
-    beta_l1_strength=1.0,
+    beta_prior=1.0,
     seed=0,
     normalized_mode=True,
+    times=None,
 ):
     gene_patterns = torch.FloatTensor(gene_patterns)
     model = TrajectoryModel(
         n_basis,
         n_genes=gene_patterns.shape[1],
         n_conditions=gene_patterns.shape[0],
-        beta_l1_strength=beta_l1_strength,
+        beta_prior=beta_prior,
         normalized_mode=normalized_mode,
     )
     guide = get_inference_guide(model, inference_mode)
@@ -42,7 +43,14 @@ def compute_basis_decomposition(
     pyro.clear_param_store()
     pyro.set_rng_seed(seed)
     num_iterations = n_iter
-    times = torch.FloatTensor(np.linspace(-10, 10, gene_patterns.shape[-1]))
+    if times is None:
+        times = torch.FloatTensor(np.linspace(-10, 10, gene_patterns.shape[-1]))
+    else:
+        times = torch.FloatTensor(times)
+
+    gene_patterns_mean = gene_patterns.mean(axis=(0, 2), keepdim=True)
+    gene_patterns_raw = gene_patterns
+    gene_patterns = gene_patterns_raw / gene_patterns_mean
 
     for j in range(num_iterations):
         # calculate the loss and take a gradient step
@@ -69,8 +77,11 @@ def compute_basis_decomposition(
         model, guide=guide, num_samples=10, return_sites=("beta", "_RETURN", "obs")
     )
     samples = predictive(times, gene_patterns)
+    samples["_RETURN"] *= gene_patterns_mean
+    gene_scales = model.gene_scales * gene_patterns_mean.squeeze(-1)
     samples = summary(samples)
-    return model, guide, times, samples
+
+    return model, guide, times, samples, gene_scales
 
 
 def main():
@@ -133,7 +144,8 @@ def main():
         # plots(model, guide, clusters, times, gene_expression, max(clusters) + 1)
 
 
-def plot_basis(model, guide, gene_patterns, times, colors=None):
+def get_basis(model, guide, gene_patterns, times):
+    return_basis_value = model.return_basis
     model.return_basis = True
     predictive = Predictive(
         model, guide=guide, num_samples=2, return_sites=("beta", "_RETURN", "obs")
@@ -141,6 +153,12 @@ def plot_basis(model, guide, gene_patterns, times, colors=None):
     samples = predictive(times, gene_patterns)
     samples = summary(samples)
     bases = samples["_RETURN"]["mean"].detach().numpy()
+    model.return_basis = return_basis_value
+    return bases
+
+
+def plot_basis(model, guide, gene_patterns, times, colors=None):
+    bases = get_basis(model, guide, gene_patterns, times)
     for i in range(bases.shape[1]):
         plt.plot(
             bases[:, i],
@@ -148,8 +166,6 @@ def plot_basis(model, guide, gene_patterns, times, colors=None):
             label="basis %d" % i,
             linewidth=3,
         )
-    # plt.legend()
-    return bases
 
 
 def plots(model, guide, true_clusters, times, gene_expression, n_clusters):
