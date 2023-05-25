@@ -15,6 +15,8 @@ def plot_decipher_v(
     basis="decipher_v_corrected",
         x_label="Decipher 1",
         y_label="Decipher 2",
+        ax_label_only_on_edges=False,
+        ncols=2,
         **kwargs
 ):
     with plt.rc_context({"figure.figsize": figsize}):
@@ -26,20 +28,28 @@ def plot_decipher_v(
             palette=palette,
             return_fig=True,
             frameon=(show_axis != "no"),
+            ncols=ncols,
             **kwargs
         )
     ax = fig.axes[0]
     if type(color) == str or len(color) == 1:
         ax.set_title(title)
 
-    if show_axis == "arrow":
-        ax.spines["top"].set_visible(False)
-        ax.spines["right"].set_visible(False)
-        ax.plot(1, 0, ">k", transform=ax.transAxes, clip_on=False)
-        ax.plot(0, 1, "^k", transform=ax.transAxes, clip_on=False)
+    for i, ax in enumerate(fig.axes[::2]):
+        if show_axis == "arrow":
+            ax.spines["top"].set_visible(False)
+            ax.spines["right"].set_visible(False)
+            ax.plot(1, 0, ">k", transform=ax.transAxes, clip_on=False)
+            ax.plot(0, 1, "^k", transform=ax.transAxes, clip_on=False)
 
-        ax.set_xlabel(x_label)
-        ax.set_ylabel(y_label)
+            if i % ncols == 0 or not ax_label_only_on_edges:
+                ax.set_ylabel(y_label)
+            else:
+                ax.set_ylabel(None)
+            if i // ncols == (len(color) - 1) // ncols or not ax_label_only_on_edges:
+                ax.set_xlabel(x_label)
+            else:
+                ax.set_xlabel(None)
     return fig
 
 
@@ -155,11 +165,12 @@ def add_cell_type_band(trajectory, palette):
     x = trajectory.trajectory_time
     plt.scatter(
         x,
-        np.zeros(len(x)) - 0.025,
+        np.zeros(len(x)) - 0.032,
         c=[palette[c] for c in trajectory.cell_types],
-        marker="|",
-        s=50,
+        marker="s",
+        s=20,
         transform=plt.gca().get_xaxis_transform(),
         clip_on=False,
+        edgecolors=None,
     )
     plt.xlabel("Decipher time", fontsize=14, labelpad=10)

@@ -180,13 +180,29 @@ def compute_trajectories(
 
     trajectory_nodes_location = np.array(
         [cluster_data.loc[cluster_id, [0, 1]] for cluster_id in trajectory_nodes]
-    )
+    ).astype(np.float32)
 
     trajectory_length = 0
     for i in range(1, len(trajectory_nodes_location)):
         trajectory_length += distance_func(trajectory_nodes_location[i - 1], trajectory_nodes_location[i])
 
-    trajectory = Trajectory(trajectory_nodes_location, adata,  cell_types_key, trajectory_point_density,)
+    trajectory = Trajectory(trajectory_nodes_location, adata,  cell_types_key, trajectory_point_density)
+
+    uns_key = "decipher_trajectories"
+    if uns_key not in adata.uns:
+        adata.uns[uns_key] = dict()
+
+    if subset_column is None:
+        # all cells were used
+        key = "all_cells"
+    else:
+        key = subset_column + "=" + subset_value
+
+    adata.uns[uns_key][key] = {
+        "times": trajectory.trajectory_time,
+        "points": trajectory.trajectory_latent,
+        "checkpoints": trajectory.checkpoints,
+    }
 
     return trajectory
 
@@ -209,7 +225,22 @@ def compute_decipher_time(adata, trajectories, n_neighbors=10):
     adata.obs["decipher_time"] = knn.predict(Xt)
 
 
-def sample_from_decipher_trajectory(adata, model, trajectory_latent, l_scale=10_000, n_samples=5, smooth=0, return_mean=False):
+def gene_patterns_from_decipher_trajectory(
+    adata,
+    model,
+    trajectory_name=None,
+    l_scale=10_000,
+    return_mean=True,
+    n_samples=1,
+):
+    if trajectory_name is None:
+        # recursively sample from all available trajectories
+        for key in adata.uns["decipher_trajectories"]:
+            gene_patterns_from_decipher_trajectory(adata, model, key, l_scale, n_samples, return_mean)
+        return
+
+    trajectory_latent = adata.uns["decipher_trajectories"][trajectory_name]["points"]
+    trajectory_times = adata.uns["decipher_trajectories"][trajectory_name]["times"]
     if "decipher_rotation" in adata.uns:
         # need to undo rotation of the decipher_v_corrected space
         trajectory_latent = trajectory_latent @ np.linalg.inv(adata.uns["decipher_rotation"])
@@ -221,32 +252,21 @@ def sample_from_decipher_trajectory(adata, model, trajectory_latent, l_scale=10_
     if return_mean:
         samples_z = z_mean
     else:
-        if smooth == 0:
-            samples_z = torch.distributions.Normal(z_mean, z_scale).sample(
-                sample_shape=(n_samples,)
-            )
-        else:
-            from scipy.linalg import cholesky as compute_cholesky
-            dim = len(trajectory_latent)
-            covx, covy = np.meshgrid(np.arange(dim), np.arange(dim))
-            L = smooth
-            cov = np.exp(-(covx - covy) ** 2 / (2 * L * L))
-            cov += np.eye(dim) * 1e-10
-            cov_cholesky = compute_cholesky(cov, lower=True)
-
-            choleskies_correlation = torch.FloatTensor(cov_cholesky)
-            choleskies_covariance = torch.einsum(
-                "id,ij -> ijd", z_scale, choleskies_correlation
-            )
-            samples_normal = torch.distributions.Normal(0.0, 1.0).sample(
-                sample_shape=(n_samples,) + z_mean.shape
-            )
-            samples_z = z_mean + torch.einsum(
-                "sjd,ijd->sid", samples_normal, choleskies_covariance
-            )
+        samples_z = torch.distributions.Normal(z_mean, z_scale).sample(
+            sample_shape=(n_samples,)
+        )
 
     samples_genes = torch.nn.functional.softmax(model.decoder_z_to_x(samples_z), dim=-1) * l_scale
-    return samples_genes.detach()
+    samples_genes = samples_genes.detach().numpy()
+
+    uns_key = "decipher_gene_patterns"
+    if uns_key not in adata.uns:
+        adata.uns[uns_key] = dict()
+    adata.uns[uns_key][trajectory_name] = pd.DataFrame(
+        samples_genes,
+        index=pd.Series(trajectory_times, name="times"),
+        columns=adata.var_names,
+    )
 
 
 #     fig = sc.pl.embedding(
