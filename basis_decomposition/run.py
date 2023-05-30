@@ -157,8 +157,7 @@ def get_basis(model, guide, gene_patterns, times):
     return bases
 
 
-def plot_basis(model, guide, gene_patterns, times, colors=None):
-    bases = get_basis(model, guide, gene_patterns, times)
+def plot_basis(bases, colors=None):
     for i in range(bases.shape[1]):
         plt.plot(
             bases[:, i],
