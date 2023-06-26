@@ -9,6 +9,7 @@ import torch
 
 from sklearn.neighbors import KNeighborsClassifier
 
+
 class Trajectory:
     def __init__(self, checkpoints, adata, cell_type_key=None, point_density=50):
         checkpoints = np.array(checkpoints)
@@ -97,14 +98,13 @@ def rotate_decipher_space(
 
     rotation = rot(best_t)
     if flip_decipher_1:
-        rotation = rotation @ np.array([[-1,0], [0,1]])
+        rotation = rotation @ np.array([[-1, 0], [0, 1]])
     adata.obsm["decipher_v_corrected"] = adata.obsm["decipher_v"] @ rotation
-
 
     if flip_latent_z:
         # We want z to be correlated positively with the components
         z_sign_correction = np.sign(
-            np.corrcoef(adata.obsm["decipher_z"], y=adata.obsm["decipher_v_corrected"], rowvar=False)[
+            np.corrcoef(adata.obsm["decipher_z"], y=adata.obsm["decipher_v_corrected"], rowvar=False,)[
                 : adata.obsm["decipher_z"].shape[1], adata.obsm["decipher_z"].shape[1] :
             ].sum(axis=1)
         )
@@ -135,25 +135,29 @@ def cluster_representations(adata, leiden_resolution=1.0, seed=0):
 
 def compute_trajectories(
     adata,
-    start_marker,
-    end_marker,
+    start_marker=None,
+    end_marker=None,
     subset_column=None,
     subset_value=None,
     trajectory_point_density=50,
     cell_types_key=None,
+    return_tree=False,
 ):
     cells_location = pd.DataFrame(adata.obsm["decipher_v_corrected"])
     cells_location["cluster"] = adata.obs["PhenoGraph_clusters"].values
     markers = [start_marker, end_marker]
 
     for m in markers:
-        cells_location[m] = adata[:, m].X.toarray().reshape(-1)
+        if m is not None:
+            cells_location[m] = adata[:, m].X.toarray().reshape(-1)
 
     aggregation = {
         0: "mean",
         1: "mean",
         **dict.fromkeys(markers, "mean"),
     }
+    if None in aggregation:
+        del aggregation[None]
     if subset_column is not None:
         aggregation[subset_column] = pd.Series.mode
         cells_location[subset_column] = adata.obs[subset_column].values
@@ -173,7 +177,8 @@ def compute_trajectories(
         G.add_edge(n1, n2, weight=distance)
 
     tree = nx.minimum_spanning_tree(G)
-
+    if return_tree:
+        return tree
     start = cluster_data[start_marker].sort_values().index[-1]
     end = cluster_data[end_marker].sort_values().index[-1]
     trajectory_nodes = nx.shortest_path(tree, start, end)
@@ -186,7 +191,7 @@ def compute_trajectories(
     for i in range(1, len(trajectory_nodes_location)):
         trajectory_length += distance_func(trajectory_nodes_location[i - 1], trajectory_nodes_location[i])
 
-    trajectory = Trajectory(trajectory_nodes_location, adata,  cell_types_key, trajectory_point_density)
+    trajectory = Trajectory(trajectory_nodes_location, adata, cell_types_key, trajectory_point_density)
 
     uns_key = "decipher_trajectories"
     if uns_key not in adata.uns:
@@ -206,22 +211,24 @@ def compute_trajectories(
 
     return trajectory
 
+
 def compute_decipher_time(adata, trajectories, n_neighbors=10):
     from sklearn.neighbors import KNeighborsRegressor
+
     adata.obs["origin_cat"] = adata.obs["origin"].astype("category")
     knn = KNeighborsRegressor(n_neighbors=n_neighbors)
     Xs = []
     Ts = []
     for origin in trajectories:
-        X_tmp = trajectories[origin].trajectory_latent @ np.array([[1,0,0], [0,1,0]])
-        X_tmp[:,2] = adata.obs["origin_cat"].cat.categories.tolist().index(origin)*1000
+        X_tmp = trajectories[origin].trajectory_latent @ np.array([[1, 0, 0], [0, 1, 0]])
+        X_tmp[:, 2] = adata.obs["origin_cat"].cat.categories.tolist().index(origin) * 1000
         Xs.append(X_tmp)
         Ts.append(trajectories[origin].trajectory_time)
     X = np.concatenate(Xs)
     t = np.concatenate(Ts)
     knn.fit(X, t)
-    Xt = adata.obsm["decipher_v_corrected"] @ np.array([[1,0,0], [0,1,0]])
-    Xt[:, 2] = adata.obs["origin_cat"].cat.codes.values*1000
+    Xt = adata.obsm["decipher_v_corrected"] @ np.array([[1, 0, 0], [0, 1, 0]])
+    Xt[:, 2] = adata.obs["origin_cat"].cat.codes.values * 1000
     adata.obs["decipher_time"] = knn.predict(Xt)
 
 
@@ -252,12 +259,13 @@ def gene_patterns_from_decipher_trajectory(
     if return_mean:
         samples_z = z_mean
     else:
-        samples_z = torch.distributions.Normal(z_mean, z_scale).sample(
-            sample_shape=(n_samples,)
-        )
+        samples_z = torch.distributions.Normal(z_mean, z_scale).sample(sample_shape=(n_samples,))
 
     samples_genes = torch.nn.functional.softmax(model.decoder_z_to_x(samples_z), dim=-1) * l_scale
     samples_genes = samples_genes.detach().numpy()
+
+    if n_samples > 1:
+        return samples_genes
 
     uns_key = "decipher_gene_patterns"
     if uns_key not in adata.uns:
@@ -269,33 +277,39 @@ def gene_patterns_from_decipher_trajectory(
     )
 
 
-#     fig = sc.pl.embedding(
-#         adata,
-#         basis="decipher_v_corrected",
-#         color=["cell_type_merged"],
-#         frameon=False,
-#         show=False,
-#         return_fig=True,
-#     )
+def compute_disruption_scores(adata):
+    """Compute all possible disruption scores:
+    - shape: ||beta[0] - beta[1]||_2
+    - scale: | log(s[0]) - log(s[1]) |
+    - combined: || log(beta[0]*s[0]) - log(beta[1]*s[1]) ||
 
-#     nx.draw_networkx(
-#         tree,
-#         nx.get_node_attributes(tree, "xy"),
-#         node_color="red",
-#     )
+    """
+    disruptions = []
+    for g_id in range(len(adata.var_names)):
+        beta_g = adata.uns["decipher_basis_decomposition"]["betas"][:, g_id, :]
+        gene_scales = adata.uns["decipher_basis_decomposition"]["scales"][:, g_id]
+        shape_disruption = np.linalg.norm(beta_g[0] - beta_g[1], ord=2)
+        #         scale_disruption = abs(gene_scales[0, g_id] - gene_scales[1, g_id])
+        scale_disruption = abs(np.log(gene_scales[0]) - np.log(gene_scales[1]))
+        combined_disruption = abs(
+            np.linalg.norm(
+                np.log(gene_scales[0] * beta_g[0]) - np.log(gene_scales[1] * beta_g[1]),
+                ord=2,
+            )
+        )
+        disruptions.append(
+            (
+                adata.var_names[g_id],
+                shape_disruption,
+                scale_disruption,
+                combined_disruption,
+            )
+        )
+    disruptions = pd.DataFrame(disruptions, columns=["gene", "shape", "scale", "combined"])
 
-#     fig.axes[0].plot(
-#         (trajectory_nodes_location)[:, 0],
-#         (trajectory_nodes_location)[:, 1],
-#         marker="o",
-#         c="black",
-#         markerfacecolor="orange",
-#     )
-#     fig.axes[0].plot(
-#         (trajectory_nodes_location)[:1, 0],
-#         (trajectory_nodes_location)[:1, 1],
-#         marker="*",
-#         markersize=20,
-#         c="black",
-#         markerfacecolor="orange",
-#     )
+    gene_mean = adata.X.toarray().mean(axis=0)
+    gene_std = adata.X.toarray().std(axis=0)
+    disruptions["gene_mean"] = gene_mean
+    disruptions["gene_std"] = gene_std
+
+    return disruptions.sort_values("combined", ascending=False)
