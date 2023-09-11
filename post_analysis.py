@@ -11,7 +11,7 @@ from sklearn.neighbors import KNeighborsClassifier
 
 
 class Trajectory:
-    def __init__(self, checkpoints, adata, cell_type_key=None, point_density=50):
+    def __init__(self, checkpoints, adata, cell_type_key=None, point_density=50, rep_key="decipher_v_corrected"):
         checkpoints = np.array(checkpoints)
         pairs = zip(checkpoints, checkpoints[1:])
         distances = []
@@ -25,6 +25,7 @@ class Trajectory:
         self.cumulative_length = cumulative_length
         self.checkpoints = checkpoints
         self.n_points = int(point_density * self.cumulative_length[-1])
+        self.rep_key = rep_key
 
         self.trajectory_latent, self.trajectory_time = self._linspace(self.n_points)
         if cell_type_key is not None:
@@ -37,7 +38,7 @@ class Trajectory:
 
     def _compute_cell_types(self, adata, cell_type_key):
         knc = KNeighborsClassifier(n_neighbors=50)
-        knc.fit(adata.obsm["decipher_v_corrected"], adata.obs[cell_type_key])
+        knc.fit(adata.obsm[self.rep_key], adata.obs[cell_type_key])
         self.cell_types = knc.predict(self.trajectory_latent)
 
     def _linspace(self, num=100):
@@ -115,12 +116,12 @@ def rotate_decipher_space(
     adata.uns["decipher_rotation"] = rotation
 
 
-def cluster_representations(adata, leiden_resolution=1.0, seed=0):
+def cluster_representations(adata, leiden_resolution=1.0, seed=0, rep_key="decipher_z_corrected"):
     sc.pp.neighbors(
         adata,
         n_neighbors=10,
         random_state=seed,
-        use_rep="decipher_z_corrected",
+        use_rep=rep_key,
         key_added="cluster_z",
     )
     sc.tl.leiden(
@@ -142,8 +143,9 @@ def compute_trajectories(
     trajectory_point_density=50,
     cell_types_key=None,
     return_tree=False,
+    rep_key="decipher_z_corrected",
 ):
-    cells_location = pd.DataFrame(adata.obsm["decipher_v_corrected"])
+    cells_location = pd.DataFrame(adata.obsm[rep_key])
     cells_location["cluster"] = adata.obs["PhenoGraph_clusters"].values
     markers = [start_marker, end_marker]
 
@@ -191,7 +193,7 @@ def compute_trajectories(
     for i in range(1, len(trajectory_nodes_location)):
         trajectory_length += distance_func(trajectory_nodes_location[i - 1], trajectory_nodes_location[i])
 
-    trajectory = Trajectory(trajectory_nodes_location, adata, cell_types_key, trajectory_point_density)
+    trajectory = Trajectory(trajectory_nodes_location, adata, cell_types_key, trajectory_point_density, rep_key=rep_key)
 
     uns_key = "decipher_trajectories"
     if uns_key not in adata.uns:
@@ -313,3 +315,65 @@ def compute_disruption_scores(adata):
     disruptions["gene_std"] = gene_std
 
     return disruptions.sort_values("combined", ascending=False)
+
+
+def compute_decipher_gene_correlation(adata, model):
+    decipher_v = torch.FloatTensor(adata.obsm["decipher_v"])
+    gene_expression_imputed_from_decipher_v = (
+        model.decoder_z_to_x(model.decoder_p_to_z(decipher_v)[0]).detach().numpy()
+    )
+    adata.varm["decipher_v_corrected_gene_covariance"] = np.cov(
+        gene_expression_imputed_from_decipher_v,
+        y=adata.obsm["decipher_v_corrected"],
+        rowvar=False,
+    )[: adata.X.shape[1], adata.X.shape[1]:]
+
+    decipher_z = torch.FloatTensor(adata.obsm["decipher_z"])
+    gene_expression_imputed_from_decipher_z = (
+        model.decoder_z_to_x(decipher_z).detach().numpy()
+    )
+    adata.varm["decipher_z_corrected_gene_covariance"] = np.cov(
+        gene_expression_imputed_from_decipher_z,
+        y=adata.obsm["decipher_z_corrected"],
+        rowvar=False,
+    )[: adata.X.shape[1], adata.X.shape[1]:]
+
+
+def reconstruct_gene_expression_from_z(model, data):
+    if isinstance(data, sc.AnnData):
+        z = data.obsm["decipher_z"]
+    else:
+        z = data
+
+    z = torch.FloatTensor(z)
+    squeeze = False
+    if len(z.shape) == 1:
+        z = z[None, :]
+        squeeze = True
+
+    predicted_gene_expression = torch.softmax(model.decoder_z_to_x(z), dim=-1)
+
+    if squeeze:
+        predicted_gene_expression = predicted_gene_expression.squeeze(0)
+
+    return predicted_gene_expression
+
+
+def reconstruct_gene_expression_from_v(model, data):
+    if isinstance(data, sc.AnnData):
+        v = data.obsm["decipher_v"]
+    else:
+        v = data
+
+    v = torch.FloatTensor(v)
+    squeeze = False
+    if len(v.shape) == 1:
+        v = v[None, :]
+        squeeze = True
+
+    predicted_z = model.decoder_p_to_z(v)[0]
+
+    if squeeze:
+        predicted_z = predicted_z.squeeze(0)
+
+    return reconstruct_gene_expression_from_z(model, predicted_z)

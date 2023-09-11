@@ -27,7 +27,7 @@ def plot_decipher_v(
             color=color,
             palette=palette,
             return_fig=True,
-            frameon=(show_axis != "no"),
+            frameon=(show_axis in [True, "arrow"]),
             ncols=ncols,
             **kwargs
         )
@@ -35,7 +35,7 @@ def plot_decipher_v(
     if type(color) == str or len(color) == 1:
         ax.set_title(title)
 
-    for i, ax in enumerate(fig.axes[::2]):
+    for i, ax in enumerate(fig.axes[::]):
         if show_axis == "arrow":
             ax.spines["top"].set_visible(False)
             ax.spines["right"].set_visible(False)
@@ -54,21 +54,27 @@ def plot_decipher_v(
 
 
 def plot_trajectory(
-    ax,
-    trajectory,
+    adata,
+    trajectory_name,
     color="blue",
+    ax=None,
 ):
+    uns_key = "decipher_trajectories"
+    checkpoints = adata.uns[uns_key][trajectory_name]["checkpoints"]
+    if ax is None:
+        ax = plt.gca()
+
     ax.plot(
-        trajectory.checkpoints[:, 0],
-        trajectory.checkpoints[:, 1],
+        checkpoints[:, 0],
+        checkpoints[:, 1],
         marker="o",
         c="black",
         markerfacecolor=color,
         markersize=7,
     )
     ax.plot(
-        trajectory.checkpoints[:1, 0],
-        trajectory.checkpoints[:1, 1],
+        checkpoints[:1, 0],
+        checkpoints[:1, 1],
         marker="*",
         markersize=20,
         c="black",
@@ -83,7 +89,8 @@ def plot_gene_patterns(
         gene_patterns,
         colors,
         labels=None,
-        crop_to_equal_length=False
+        crop_to_equal_length=False,
+        figsize=[3, 2.3],
 ):
     gene_id = adata.var_names.tolist().index(gene_name)
 
@@ -91,9 +98,10 @@ def plot_gene_patterns(
         if len(x.shape) == 2:
             return np.stack([moving_average(xx, w) for xx in x])
         return np.convolve(x, np.ones(w), "valid") / w
-
+    singular = False
     if type(gene_patterns) != list:
         gene_patterns = [gene_patterns]
+        singular = True
     if type(colors) != list:
         colors = [colors]
     if labels is None:
@@ -103,7 +111,7 @@ def plot_gene_patterns(
     if type(trajectories) != list:
         trajectories = [trajectories]
 
-    fig = plt.figure(figsize=[3, 2.3])
+    fig = plt.figure(figsize=figsize)
     min_time = 100000
     max_time = -100000
     if crop_to_equal_length:
@@ -158,7 +166,7 @@ def plot_gene_patterns(
     plt.ylim(0)
     plt.xlim(min_time, max_time)
     plt.legend(frameon=False)
-    plt.title(gene_name + " patterns", fontsize=18)
+    plt.title(gene_name , fontsize=18)
 
 
 def add_cell_type_band(trajectory, palette):
