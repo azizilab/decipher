@@ -28,6 +28,7 @@ def compute_basis_decomposition(
     normalized_mode=True,
     times=None,
 ):
+    pyro.set_rng_seed(seed)
     gene_patterns = torch.FloatTensor(gene_patterns)
     model = TrajectoryModel(
         n_basis,
@@ -41,7 +42,6 @@ def compute_basis_decomposition(
     svi = SVI(model, guide, adam, loss=Trace_ELBO())
 
     pyro.clear_param_store()
-    pyro.set_rng_seed(seed)
     num_iterations = n_iter
     if times is None:
         times = torch.FloatTensor(np.linspace(-10, 10, gene_patterns.shape[-1]))
@@ -162,7 +162,7 @@ def plot_basis(bases, colors=None):
         plt.plot(
             bases[:, i],
             c=colors[i] if colors is not None else None,
-            label="basis %d" % i,
+            label="basis %d" % (i+1),
             linewidth=3,
         )
 
