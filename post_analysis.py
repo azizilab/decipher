@@ -143,7 +143,7 @@ def compute_trajectories(
     trajectory_point_density=50,
     cell_types_key=None,
     return_tree=False,
-    rep_key="decipher_z_corrected",
+    rep_key="decipher_v_corrected",
 ):
     cells_location = pd.DataFrame(adata.obsm[rep_key])
     cells_location["cluster"] = adata.obs["PhenoGraph_clusters"].values
