@@ -46,21 +46,21 @@ class Decipher(nn.Module):
 
         self.decoder_p_to_z = ConditionalDenseNN(
             self.pre_latent_dim,
-            self.context_dim,
             decipher_config.p_to_z_layers,
             [self.latent_dim, self.latent_dim],
+            self.context_dim,
         )
         self.decoder_z_to_x = ConditionalDenseNN(
-            self.latent_dim, self.context_dim, decipher_config.z_to_x_layers, [self.genes_dim]
+            self.latent_dim, decipher_config.z_to_x_layers, [self.genes_dim], self.context_dim
         )
         self.encoder_x_to_z = ConditionalDenseNN(
-            self.genes_dim, self.context_dim, [128], [self.latent_dim, self.latent_dim]
+            self.genes_dim, [128], [self.latent_dim, self.latent_dim], self.context_dim
         )
         self.encoder_zx_to_p = ConditionalDenseNN(
             self.genes_dim + self.latent_dim,
-            self.context_dim,
             [128],
             [self.pre_latent_dim, self.pre_latent_dim],
+            self.context_dim,
         )
 
         self.epsilon = 5.0e-3
@@ -84,13 +84,21 @@ class Decipher(nn.Module):
             # KL annealing might be useful
             with poutine.scale(scale=self.beta):
                 if self.prior == "gamma":
-                    p = pyro.sample("p", dist.Gamma(0.3, x.new_ones(self.pre_latent_dim) * 0.8).to_event(1))
+                    p = pyro.sample(
+                        "p", dist.Gamma(0.3, x.new_ones(self.pre_latent_dim) * 0.8).to_event(1)
+                    )
                 elif self.prior == "normal" or self.prior == "normal-student":
-                    p = pyro.sample("p", dist.Normal(0, x.new_ones(self.pre_latent_dim)).to_event(1))
+                    p = pyro.sample(
+                        "p", dist.Normal(0, x.new_ones(self.pre_latent_dim)).to_event(1)
+                    )
                 elif self.prior == "student-normal":
-                    p = pyro.sample("p", dist.StudentT(1, 0, x.new_ones(self.pre_latent_dim)).to_event(1))
+                    p = pyro.sample(
+                        "p", dist.StudentT(1, 0, x.new_ones(self.pre_latent_dim)).to_event(1)
+                    )
                 else:
-                    raise ValueError("prior should be one of normal, gamma, student-normal, normal-student")
+                    raise ValueError(
+                        "prior should be one of normal, gamma, student-normal, normal-student"
+                    )
 
             z_loc, z_scale = self.decoder_p_to_z(p, context=context)
             z_scale = softplus(z_scale)
@@ -128,12 +136,11 @@ class Decipher(nn.Module):
         return z_loc, p_loc
 
     def impute_data(self, x):
-        z_loc,_ = self.guide(x)
+        z_loc, _ = self.guide(x)
         mu = self.decoder_z_to_x(z_loc)
         mu = softmax(mu, dim=-1)
         library_size = x.sum(axis=-1, keepdim=True)
         return library_size * mu
-
 
     def reconstruct_from_prelatent_numpy(self, p, scale=1.0):
         z_loc, z_scale = self.decoder_p_to_z(p)
