@@ -209,6 +209,7 @@ def compute_trajectories(
         "times": trajectory.trajectory_time,
         "points": trajectory.trajectory_latent,
         "checkpoints": trajectory.checkpoints,
+        "clusters": trajectory_nodes,
     }
 
     return trajectory
@@ -233,6 +234,19 @@ def compute_decipher_time(adata, trajectories, n_neighbors=10):
     Xt[:, 2] = adata.obs["origin_cat"].cat.codes.values * 1000
     adata.obs["decipher_time"] = knn.predict(Xt)
 
+
+def compute_decipher_time_new(adata, n_neighbors=10):
+    from sklearn.neighbors import KNeighborsRegressor
+
+    adata.obs["decipher_time"] = np.nan
+    for name, trajectory in adata.uns["decipher_trajectories"].items():
+        knn = KNeighborsRegressor(n_neighbors=n_neighbors)
+        knn.fit(trajectory["points"], trajectory["times"])
+        is_on_trajectory = adata.obs["PhenoGraph_clusters"].isin(trajectory["clusters"])
+        cells_on_trajectory_index = adata.obs[is_on_trajectory].index
+        cells_on_trajectory_idx = np.where(is_on_trajectory)[0]
+
+        adata.obs.loc[cells_on_trajectory_index, "decipher_time"] = knn.predict(adata.obsm["decipher_v_corrected"][cells_on_trajectory_idx])
 
 def gene_patterns_from_decipher_trajectory(
     adata,

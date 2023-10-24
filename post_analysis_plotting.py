@@ -13,11 +13,11 @@ def plot_decipher_v(
     palette=None,
     subsample_frac=1.0,
     basis="decipher_v_corrected",
-        x_label="Decipher 1",
-        y_label="Decipher 2",
-        ax_label_only_on_edges=False,
-        ncols=2,
-        **kwargs
+    x_label="Decipher 1",
+    y_label="Decipher 2",
+    ax_label_only_on_edges=False,
+    ncols=2,
+    **kwargs
 ):
     with plt.rc_context({"figure.figsize": figsize}):
 
@@ -36,6 +36,8 @@ def plot_decipher_v(
         ax.set_title(title)
 
     for i, ax in enumerate(fig.axes[::]):
+        if ax._label == "<colorbar>":
+            continue
         if show_axis == "arrow":
             ax.spines["top"].set_visible(False)
             ax.spines["right"].set_visible(False)
@@ -83,21 +85,25 @@ def plot_trajectory(
 
 
 def plot_gene_patterns(
-        gene_name,
-        adata,
-        trajectories,
-        gene_patterns,
-        colors,
-        labels=None,
-        crop_to_equal_length=False,
-        figsize=[3, 2.3],
+    gene_name,
+    adata,
+    trajectories,
+    gene_patterns,
+    colors,
+    labels=None,
+    crop_to_equal_length=False,
+    figsize=[3, 2.3],
 ):
-    gene_id = adata.var_names.tolist().index(gene_name)
+    if type(gene_name) == list:
+        gene_id = [adata.var_names.tolist().index(gn) for gn in gene_name]
+    else:
+        gene_id = adata.var_names.tolist().index(gene_name)
 
     def moving_average(x, w):
         if len(x.shape) == 2:
             return np.stack([moving_average(xx, w) for xx in x])
         return np.convolve(x, np.ones(w), "valid") / w
+
     singular = False
     if type(gene_patterns) != list:
         gene_patterns = [gene_patterns]
@@ -118,17 +124,20 @@ def plot_gene_patterns(
         min_time, max_time = max_time, min_time
 
     for gene_pattern, color, label, trajectory in zip(
-            gene_patterns,
-            colors,
-            labels,
-            trajectories,
+        gene_patterns,
+        colors,
+        labels,
+        trajectories,
     ):
         if torch.is_tensor(gene_pattern):
             gene_pattern = gene_pattern.detach().numpy()
         if len(gene_pattern.shape) == 2:
             gene_pattern = gene_pattern[None, :, :]
 
-        gene_pattern = gene_pattern[:, :, gene_id]
+        if type(gene_id) == list:
+            gene_pattern = gene_pattern[:, :, gene_id].mean(axis=2)
+        else:
+            gene_pattern = gene_pattern[:, :, gene_id]
         gene_pattern = moving_average(gene_pattern, 5)
         gene_pattern_mean = gene_pattern.mean(axis=0)
         # gene_pattern_mean = moving_average(gene_pattern_mean, 5)
@@ -166,7 +175,7 @@ def plot_gene_patterns(
     plt.ylim(0)
     plt.xlim(min_time, max_time)
     plt.legend(frameon=False)
-    plt.title(gene_name , fontsize=18)
+    plt.title(gene_name, fontsize=18)
 
 
 def add_cell_type_band(trajectory, palette):
