@@ -8,7 +8,7 @@ import torch
 import torch.nn as nn
 from torch.distributions import constraints
 from torch.nn.functional import softmax, softplus
-from utils import ConditionalDenseNN
+from model.utils import ConditionalDenseNN
 
 
 @dataclass(unsafe_hash=True)

@@ -6,7 +6,7 @@ import torch
 from pyro.infer import Trace_ELBO, SVI
 from pyro.optim import MultiStepLR
 
-from decipher_model import make_data_loader_from_adata, Decipher
+from model.decipher_model import make_data_loader_from_adata, Decipher
 
 
 def plot_decipher(adata, title=None, **kwargs):
@@ -52,7 +52,9 @@ def train_simple(
     decipher_config.scale_factor = scale_factor
 
     dataloader = make_data_loader_from_adata(adata, batch_size)
-    context_dim = dataloader.dataset.tensors[1].shape[1] if len(dataloader.dataset.tensors) > 1 else 0
+    context_dim = (
+        dataloader.dataset.tensors[1].shape[1] if len(dataloader.dataset.tensors) > 1 else 0
+    )
 
     decipher = Decipher(
         genes_dim=num_genes,
