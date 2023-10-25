@@ -11,7 +11,14 @@ from sklearn.neighbors import KNeighborsClassifier
 
 
 class Trajectory:
-    def __init__(self, checkpoints, adata, cell_type_key=None, point_density=50, rep_key="decipher_v_corrected"):
+    def __init__(
+        self,
+        checkpoints,
+        adata,
+        cell_type_key=None,
+        point_density=50,
+        rep_key="decipher_v_corrected",
+    ):
         checkpoints = np.array(checkpoints)
         pairs = zip(checkpoints, checkpoints[1:])
         distances = []
@@ -105,9 +112,11 @@ def rotate_decipher_space(
     if flip_latent_z:
         # We want z to be correlated positively with the components
         z_sign_correction = np.sign(
-            np.corrcoef(adata.obsm["decipher_z"], y=adata.obsm["decipher_v_corrected"], rowvar=False,)[
-                : adata.obsm["decipher_z"].shape[1], adata.obsm["decipher_z"].shape[1] :
-            ].sum(axis=1)
+            np.corrcoef(
+                adata.obsm["decipher_z"],
+                y=adata.obsm["decipher_v_corrected"],
+                rowvar=False,
+            )[: adata.obsm["decipher_z"].shape[1], adata.obsm["decipher_z"].shape[1] :].sum(axis=1)
         )
     else:
         z_sign_correction = 1.0
@@ -134,7 +143,7 @@ def cluster_representations(adata, leiden_resolution=1.0, seed=0, rep_key="decip
     adata.obs["PhenoGraph_clusters"] = pd.Categorical(adata.obs["leiden_decipher_z"])
 
 
-def compute_trajectories(
+def compute_trajectories_old(
     adata,
     start_marker=None,
     end_marker=None,
@@ -191,9 +200,13 @@ def compute_trajectories(
 
     trajectory_length = 0
     for i in range(1, len(trajectory_nodes_location)):
-        trajectory_length += distance_func(trajectory_nodes_location[i - 1], trajectory_nodes_location[i])
+        trajectory_length += distance_func(
+            trajectory_nodes_location[i - 1], trajectory_nodes_location[i]
+        )
 
-    trajectory = Trajectory(trajectory_nodes_location, adata, cell_types_key, trajectory_point_density, rep_key=rep_key)
+    trajectory = Trajectory(
+        trajectory_nodes_location, adata, cell_types_key, trajectory_point_density, rep_key=rep_key
+    )
 
     uns_key = "decipher_trajectories"
     if uns_key not in adata.uns:
@@ -246,7 +259,10 @@ def compute_decipher_time_new(adata, n_neighbors=10):
         cells_on_trajectory_index = adata.obs[is_on_trajectory].index
         cells_on_trajectory_idx = np.where(is_on_trajectory)[0]
 
-        adata.obs.loc[cells_on_trajectory_index, "decipher_time"] = knn.predict(adata.obsm["decipher_v_corrected"][cells_on_trajectory_idx])
+        adata.obs.loc[cells_on_trajectory_index, "decipher_time"] = knn.predict(
+            adata.obsm["decipher_v_corrected"][cells_on_trajectory_idx]
+        )
+
 
 def gene_patterns_from_decipher_trajectory(
     adata,
@@ -259,7 +275,9 @@ def gene_patterns_from_decipher_trajectory(
     if trajectory_name is None:
         # recursively sample from all available trajectories
         for key in adata.uns["decipher_trajectories"]:
-            gene_patterns_from_decipher_trajectory(adata, model, key, l_scale, n_samples, return_mean)
+            gene_patterns_from_decipher_trajectory(
+                adata, model, key, l_scale, n_samples, return_mean
+            )
         return
 
     trajectory_latent = adata.uns["decipher_trajectories"][trajectory_name]["points"]
@@ -269,7 +287,7 @@ def gene_patterns_from_decipher_trajectory(
         trajectory_latent = trajectory_latent @ np.linalg.inv(adata.uns["decipher_rotation"])
 
     trajectory_latent = torch.FloatTensor(trajectory_latent)
-    z_mean, z_scale = model.decoder_p_to_z(trajectory_latent)
+    z_mean, z_scale = model.decoder_v_to_z(trajectory_latent)
     z_scale = torch.nn.functional.softplus(z_scale)
 
     if return_mean:
@@ -334,23 +352,21 @@ def compute_disruption_scores(adata):
 def compute_decipher_gene_correlation(adata, model):
     decipher_v = torch.FloatTensor(adata.obsm["decipher_v"])
     gene_expression_imputed_from_decipher_v = (
-        model.decoder_z_to_x(model.decoder_p_to_z(decipher_v)[0]).detach().numpy()
+        model.decoder_z_to_x(model.decoder_v_to_z(decipher_v)[0]).detach().numpy()
     )
     adata.varm["decipher_v_corrected_gene_covariance"] = np.cov(
         gene_expression_imputed_from_decipher_v,
         y=adata.obsm["decipher_v_corrected"],
         rowvar=False,
-    )[: adata.X.shape[1], adata.X.shape[1]:]
+    )[: adata.X.shape[1], adata.X.shape[1] :]
 
     decipher_z = torch.FloatTensor(adata.obsm["decipher_z"])
-    gene_expression_imputed_from_decipher_z = (
-        model.decoder_z_to_x(decipher_z).detach().numpy()
-    )
+    gene_expression_imputed_from_decipher_z = model.decoder_z_to_x(decipher_z).detach().numpy()
     adata.varm["decipher_z_corrected_gene_covariance"] = np.cov(
         gene_expression_imputed_from_decipher_z,
         y=adata.obsm["decipher_z_corrected"],
         rowvar=False,
-    )[: adata.X.shape[1], adata.X.shape[1]:]
+    )[: adata.X.shape[1], adata.X.shape[1] :]
 
 
 def reconstruct_gene_expression_from_z(model, data):
@@ -385,7 +401,7 @@ def reconstruct_gene_expression_from_v(model, data):
         v = v[None, :]
         squeeze = True
 
-    predicted_z = model.decoder_p_to_z(v)[0]
+    predicted_z = model.decoder_v_to_z(v)[0]
 
     if squeeze:
         predicted_z = predicted_z.squeeze(0)
