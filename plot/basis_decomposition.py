@@ -1,7 +1,7 @@
 from matplotlib import pyplot as plt
 
 
-def plot_basis(adata, colors=None):
+def basis(adata, colors=None):
     bases = adata.uns["decipher"]["basis_decomposition"]["basis"]
     fig = plt.figure(figsize=(5, 2.5))
     for i in range(bases.shape[1]):
