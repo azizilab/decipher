@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 
 from basis_decomposition.inference import InferenceMode
 
@@ -30,7 +31,7 @@ def basis_decomposition(
     gp_name = gene_patterns_names[0]
     gene_patterns_times = adata.uns["decipher"]["gene_patterns"][gp_name]["times"][:min_len]
 
-    trajectory_model, guide, times, samples, gene_scales = run_compute_basis_decomposition(
+    trajectory_model, guide, times, samples, gene_scales, losses = run_compute_basis_decomposition(
         gene_patterns,
         InferenceMode.GAUSSIAN_BETA_ONLY,
         n_basis=n_basis,
@@ -54,3 +55,43 @@ def basis_decomposition(
             for i, gp_name in enumerate(gene_patterns_names)
         },
     }
+
+    return losses
+
+
+def disruption_scores(adata):
+    """Compute all possible disruption scores:
+    - shape: ||beta[0] - beta[1]||_2
+    - scale: | log(s[0]) - log(s[1]) |
+    - combined: || log(beta[0]*s[0]) - log(beta[1]*s[1]) ||
+
+    """
+    disruptions = []
+    for g_id in range(len(adata.var_names)):
+        beta_g = adata.uns["decipher"]["basis_decomposition"]["betas"][:, g_id, :]
+        gene_scales = adata.uns["decipher"]["basis_decomposition"]["scales"][:, g_id]
+        shape_disruption = np.linalg.norm(beta_g[0] - beta_g[1], ord=2)
+        scale_disruption = abs(np.log(gene_scales[0]) - np.log(gene_scales[1]))
+        combined_disruption = abs(
+            np.linalg.norm(
+                np.log(gene_scales[0] * beta_g[0]) - np.log(gene_scales[1] * beta_g[1]), ord=2
+            )
+        )
+        disruptions.append(
+            (
+                adata.var_names[g_id],
+                shape_disruption,
+                scale_disruption,
+                combined_disruption,
+            )
+        )
+    disruptions = pd.DataFrame(disruptions, columns=["gene", "shape", "scale", "combined"])
+
+    gene_mean = adata.X.toarray().mean(axis=0)
+    gene_std = adata.X.toarray().std(axis=0)
+    disruptions["gene_mean"] = gene_mean
+    disruptions["gene_std"] = gene_std
+
+    adata.uns["decipher"]["disruption_scores"] = disruptions.sort_values(
+        "combined", ascending=False
+    )
