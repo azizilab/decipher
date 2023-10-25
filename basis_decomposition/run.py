@@ -3,11 +3,14 @@ import time
 
 import numpy as np
 import pyro
+import pyro.infer
+import pyro.optim
 import torch
 from pyro.infer import SVI, Trace_ELBO, Predictive
 from sklearn.metrics import adjusted_rand_score
+from tqdm import tqdm
 
-from basis_decomposition.model import TrajectoryModel
+from basis_decomposition.model import BasisDecomposition
 from basis_decomposition.inference import get_inference_guide, InferenceMode
 
 from sklearn.cluster import KMeans, DBSCAN
@@ -22,7 +25,6 @@ def compute_basis_decomposition(
     n_basis=5,
     lr=1e-3,
     n_iter=10_000,
-    show_basis=False,
     beta_prior=1.0,
     seed=0,
     normalized_mode=True,
@@ -30,7 +32,7 @@ def compute_basis_decomposition(
 ):
     pyro.set_rng_seed(seed)
     gene_patterns = torch.FloatTensor(gene_patterns)
-    model = TrajectoryModel(
+    model = BasisDecomposition(
         n_basis,
         n_genes=gene_patterns.shape[1],
         n_conditions=gene_patterns.shape[0],
@@ -46,31 +48,24 @@ def compute_basis_decomposition(
     if times is None:
         times = torch.FloatTensor(np.linspace(-10, 10, gene_patterns.shape[-1]))
     else:
+        # TODO: must find a way to ensure that the times are in [-5, 5]-ish
         times = torch.FloatTensor(times)
 
     gene_patterns_mean = gene_patterns.mean(axis=(0, 2), keepdim=True)
     gene_patterns_raw = gene_patterns
     gene_patterns = gene_patterns_raw / gene_patterns_mean
 
-    for j in range(num_iterations):
+    pbar = tqdm(range(num_iterations))
+
+    for _ in pbar:
         # calculate the loss and take a gradient step
         loss = svi.step(times, gene_patterns)
-        if j % 100 == 0:
-            model.return_basis = False
-            predictive = Predictive(
-                model, guide=guide, num_samples=10, return_sites=("beta", "_RETURN", "obs")
-            )
-            samples = predictive(times, gene_patterns)
-            samples = summary(samples)
-            reconstruction = ((samples["_RETURN"]["mean"] - gene_patterns) ** 2).mean().item()
-            reconstruction_rel = reconstruction / (gene_patterns ** 2).mean()
-            print(
-                "[iteration %04d] loss: %.4f" % (j + 1, loss / len(gene_patterns)),
-                reconstruction,
-                reconstruction_rel,
-            )
-            if show_basis:
-                plot_basis(model, guide, gene_patterns, times)
+        reconstruction = ((model._last_patterns - gene_patterns) ** 2).mean().item()
+        reconstruction_rel = reconstruction / (gene_patterns ** 2).mean()
+
+        pbar.set_description(
+            "Loss: %.1f - Relative Error: %.2f%%" % (loss, reconstruction_rel * 100)
+        )
 
     model.return_basis = False
     predictive = Predictive(
@@ -90,7 +85,7 @@ def main():
     gene_expression = torch.FloatTensor(gene_expression).unsqueeze(0)
     times = torch.FloatTensor(times)
 
-    model = TrajectoryModel(
+    model = BasisDecomposition(
         10, n_genes=gene_expression.shape[1], n_conditions=gene_expression.shape[0]
     )
     guide = get_inference_guide(model, InferenceMode.GAUSSIAN_BETA_ONLY)
@@ -145,6 +140,8 @@ def main():
 
 
 def get_basis(model, guide, gene_patterns, times):
+    gene_patterns = torch.FloatTensor(gene_patterns)
+    times = torch.FloatTensor(times)
     return_basis_value = model.return_basis
     model.return_basis = True
     predictive = Predictive(
@@ -162,7 +159,7 @@ def plot_basis(bases, colors=None):
         plt.plot(
             bases[:, i],
             c=colors[i] if colors is not None else None,
-            label="basis %d" % (i+1),
+            label="basis %d" % (i + 1),
             linewidth=3,
         )
 

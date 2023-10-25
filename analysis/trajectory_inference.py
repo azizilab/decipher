@@ -1,18 +1,24 @@
 import itertools
+import logging
+import sys
 
 import networkx as nx
 import numpy as np
 import pandas as pd
 import scanpy as sc
 import scipy.spatial
-from sklearn.neighbors import KNeighborsClassifier
+import torch.nn.functional
 
+# from sklearn.neighbors import KNeighborsClassifier
 
-def create_decipher_uns_key(adata):
-    if "decipher" not in adata.uns:
-        adata.uns["decipher"] = dict()
-    if "trajectories" not in adata.uns["decipher"]:
-        adata.uns["decipher"]["trajectories"] = dict()
+from model.data import load_decipher_model
+from utils import create_decipher_uns_key
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(
+    format="%(asctime)s | %(levelname)s : %(message)s",
+    level=logging.INFO,  # stream=sys.stdout
+)
 
 
 class Trajectory:
@@ -96,15 +102,42 @@ class Trajectory:
         return trajectory
 
 
-def cluster_cells(adata, leiden_resolution=1.0, seed=0, rep_key="decipher_z_corrected"):
+class TConfig:
+    def __init__(
+        self,
+        trajectory_name,
+        start_cluster,
+        end_cluster,
+        subset_col=None,
+        subset_val=None,
+    ):
+        self.trajectory_name = trajectory_name
+        self.start_cluster = start_cluster
+        self.end_cluster = end_cluster
+        self.subset_column = subset_col
+        self.subset_value = subset_val
+
+    def resolve_cluster(self, adata):
+        pass
+
+
+def cell_clusters(adata, leiden_resolution=1.0, seed=0, rep_key="decipher_z_corrected"):
+
+    logger.info("Clustering cells using scanpy Leiden algorithm.")
     neighbors_key = rep_key + "_neighbors"
     cluster_key = rep_key + "_clusters"
+    logger.info(
+        f"Step 1: Computing neighbors with `sc.pp.neighbors`, with the representation {rep_key}."
+    )
     sc.pp.neighbors(
         adata,
         n_neighbors=10,
         random_state=seed,
         use_rep=rep_key,
         key_added=neighbors_key,
+    )
+    logger.info(
+        f"Step 2: Computing clusters with `sc.tl.leiden`, and resolution {leiden_resolution}."
     )
     sc.tl.leiden(
         adata,
@@ -133,11 +166,14 @@ def find_cluster_with_marker(
     marker : str
         The marker gene.
     subset_column : str (optional)
-        The column in adata.obs to subset on.
+        The column in `adata.obs` to subset on.
     subset_value : str (optional)
         The value in subset_column to subset on.
     cluster_key : str
-        The key in adata.obs where the cluster information is stored.
+        The key in `adata.obs` where the cluster information is stored.
+    min_cell_per_cluster : int
+        The minimum number of cells per cluster to consider it. If a cluster has fewer cells than
+        this, it is discarded. It is especially useful when subsetting the cells.
     """
     marker_data = pd.DataFrame(adata[:, marker].X.toarray())
     marker_data["cluster"] = adata.obs[cluster_key].values
@@ -151,7 +187,7 @@ def find_cluster_with_marker(
     return marker_data.index[0]
 
 
-def compute_trajectories(
+def trajectories(
     adata,
     start_end_clusters_dict,
     resolution=50,
@@ -169,11 +205,11 @@ def compute_trajectories(
     resolution : int
         The number of points per unit of length.
     cluster_key : str
-        The key in adata.obs where the cluster ids are stored.
+        The key in `adata.obs` where the cluster ids are stored.
 
     Returns
     -------
-    The trajectories are stored in adata.uns["decipher"]["trajectories"], which is a nested
+    The trajectories are stored in `adata.uns["decipher"]["trajectories"]`, which is a nested
     dictionary with the structure:
     - trajectory_name
         - cluster_locations: the locations of the clusters in the latent space
@@ -216,7 +252,19 @@ def compute_trajectories(
         adata.uns["decipher"][uns_key][t_name] = trajectory.to_dict()
 
 
-def compute_decipher_time(adata, n_neighbors=10):
+def decipher_time(adata, n_neighbors=10):
+    """Compute the decipher time for each cell, based on the inferred trajectories.
+
+    The decipher time is computed by KNN regression of the cells' decipher v on the trajectories.
+
+    Parameters
+    ----------
+    adata : AnnData
+        The AnnData object. The trajectories should have been computed and stored in
+        `adata.uns["decipher"]["trajectories"]`.
+    n_neighbors : int
+        The number of neighbors to use for the KNN regression.
+    """
     from sklearn.neighbors import KNeighborsRegressor
 
     cluster_key = "decipher_clusters"
@@ -233,5 +281,70 @@ def compute_decipher_time(adata, n_neighbors=10):
         )
 
 
-def compute_gene_patterns(adata):
-    pass
+def gene_patterns(adata, l_scale=10_000, n_samples=100):
+    """Compute the gene patterns for each trajectory.
+
+    The trajectories' points are sent through the decoders, thus defining distributions over the
+    gene expression. The gene patterns are computed by sampling from these distribution.
+
+    Parameters
+    ----------
+    adata : AnnData
+        The AnnData object. The trajectories should have been computed and stored in
+        `adata.uns["decipher"]["trajectories"]`.
+    l_scale : float
+        The library size scaling factor.
+    n_samples : int
+        The number of samples to draw from the decoder to compute the gene pattern statistics.
+
+    Returns
+    -------
+    The gene patterns are stored in `adata.uns["decipher"]["gene_patterns"]`, which is a nested
+    dictionary with the structure:
+    - trajectory_name
+        - mean: the mean gene expression pattern
+        - q25: the 25% quantile of the gene expression pattern
+        - q75: the 75% quantile of the gene expression pattern
+        - times: the times of the trajectory
+    """
+    uns_decipher_key = "gene_patterns"
+    model = load_decipher_model(adata)
+    if uns_decipher_key not in adata.uns["decipher"]:
+        adata.uns["decipher"][uns_decipher_key] = dict()
+
+    for t_name in adata.uns["decipher"]["trajectories"]:
+        t_points = adata.uns["decipher"]["trajectories"][t_name]["points"]
+        t_times = adata.uns["decipher"]["trajectories"][t_name]["times"]
+
+        # TODO: deprecated
+        if "decipher_rotation" in adata.uns:
+            print("undoing rotation")
+            # need to undo rotation of the decipher_v_corrected space
+            t_points = t_points @ np.linalg.inv(adata.uns["decipher_rotation"])
+
+        t_points = torch.FloatTensor(t_points)
+        z_mean, z_scale = model.decoder_v_to_z(t_points)
+        z_scale = torch.nn.functional.softplus(z_scale)
+
+        z_samples = torch.distributions.Normal(z_mean, z_scale).sample(sample_shape=(n_samples,))
+
+        gene_patterns = dict()
+        gene_patterns["mean"] = (
+            torch.nn.functional.softmax(model.decoder_z_to_x(z_mean), dim=-1).detach().numpy()
+            * l_scale
+        )
+
+        gene_expression_samples = (
+            torch.nn.functional.softmax(model.decoder_z_to_x(z_samples), dim=-1).detach().numpy()
+            * l_scale
+        )
+        gene_patterns["q25"] = np.quantile(gene_expression_samples, 0.25, axis=0)
+        gene_patterns["q75"] = np.quantile(gene_expression_samples, 0.75, axis=0)
+
+        # Maybe this should be the mean that we use
+        gene_patterns["mean2"] = gene_expression_samples.mean(axis=0)
+
+        adata.uns["decipher"][uns_decipher_key][t_name] = {
+            **gene_patterns,
+            "times": t_times,
+        }

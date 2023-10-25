@@ -1,9 +1,10 @@
 from .trajectory_inference import (
-    Trajectory,
-    cluster_cells,
+    cell_clusters,
     find_cluster_with_marker,
-    compute_trajectories,
-    compute_decipher_time,
+    trajectories,
+    decipher_time,
+    gene_patterns,
 )
+from .basis_decomposition import basis_decomposition
 
-from .post_analysis import *
+# from .post_analysis import *
