@@ -6,7 +6,7 @@ import torch
 from pyro.infer import Trace_ELBO, SVI
 from pyro.optim import MultiStepLR
 
-from model.decipher_model import make_data_loader_from_adata, Decipher
+from model.decipher import make_data_loader_from_adata, Decipher
 
 
 def plot_decipher(adata, title=None, **kwargs):
@@ -48,17 +48,15 @@ def train_simple(
         plot_kwargs = dict()
 
     num_genes = adata.shape[1]
-    scale_factor = adata.shape[0] / batch_size
-    decipher_config.scale_factor = scale_factor
+    minibatch_rescaling = adata.shape[0] / batch_size
+    decipher_config.minibatch_rescaling = minibatch_rescaling
 
     dataloader = make_data_loader_from_adata(adata, batch_size)
-    context_dim = (
-        dataloader.dataset.tensors[1].shape[1] if len(dataloader.dataset.tensors) > 1 else 0
-    )
+    if len(dataloader.dataset.tensors) > 1:
+        raise ValueError("Only single dataset supported, context is deprecated.")
 
     decipher = Decipher(
         genes_dim=num_genes,
-        context_dim=context_dim,
         decipher_config=decipher_config,
     )
 
@@ -87,7 +85,6 @@ def train_simple(
             decipher_to_adata(decipher, adata, dataloader)
             plot_decipher(adata, **plot_kwargs)
             plt.show()
-    #         decipher.beta = 1
 
     decipher_to_adata(decipher, adata, dataloader)
 
