@@ -89,6 +89,7 @@ class Trajectory:
             times=self.trajectory_time,
             cumulative_length=self.cumulative_length,
             density=self._point_density,
+            rep_key=self.rep_key,
         )
 
     @staticmethod
@@ -105,20 +106,50 @@ class Trajectory:
 class TConfig:
     def __init__(
         self,
-        trajectory_name,
         start_cluster,
         end_cluster,
         subset_col=None,
         subset_val=None,
+        subset_percent_per_cluster=0.3,
+        min_cell_per_cluster=10,
     ):
-        self.trajectory_name = trajectory_name
-        self.start_cluster = start_cluster
-        self.end_cluster = end_cluster
+        self._start_cluster = start_cluster
+        self._end_cluster = end_cluster
         self.subset_column = subset_col
         self.subset_value = subset_val
+        self.subset_percent_per_cluster = subset_percent_per_cluster
+        self.min_cell_per_cluster = min_cell_per_cluster
 
-    def resolve_cluster(self, adata):
-        pass
+    def _compute_cluster_id(self, adata, cluster_input, cluster_key="decipher_clusters"):
+        # several things:
+        # if cluster_input is present in `adata.obs[cluster_key]`,
+        #   then it is a cluster id, so return it
+        # otherwise,
+        #   it is a marker gene, so find the cluster with the highest expression of this gene
+        # for this, if subset_column is not None, subset the cells and remove clusters with too few
+        # cells
+        # then return the cluster id with the highest expression of the marker gene
+        if cluster_input in adata.obs[cluster_key].values:
+            # the cluster_input is already a cluster id
+            return cluster_input
+
+        # otherwise, it is a marker gene
+        cluster_id = find_cluster_with_marker(
+            adata,
+            cluster_input,
+            subset_column=self.subset_column,
+            subset_value=self.subset_value,
+            subset_percent_per_cluster=self.subset_percent_per_cluster,
+            cluster_key=cluster_key,
+            min_cell_per_cluster=self.min_cell_per_cluster,
+        )
+        return cluster_id
+
+    def get_start_cluster_id(self, adata):
+        return self._compute_cluster_id(adata, self._start_cluster)
+
+    def get_end_cluster_id(self, adata):
+        return self._compute_cluster_id(adata, self._end_cluster)
 
 
 def cell_clusters(adata, leiden_resolution=1.0, seed=0, rep_key="decipher_z_corrected"):
@@ -149,11 +180,39 @@ def cell_clusters(adata, leiden_resolution=1.0, seed=0, rep_key="decipher_z_corr
     adata.obs["decipher_clusters"] = pd.Categorical(adata.obs[cluster_key])
 
 
+def _subset_cells_and_clusters(
+    adata,
+    subset_column,
+    subset_value,
+    subset_percent_per_cluster=0.3,
+    min_cell_per_cluster=10,
+    cluster_key="decipher_clusters",
+):
+    """ """
+    data = adata.obs[[subset_column, cluster_key]].copy()
+    data.columns = ["subset", "cluster"]
+    data["in_subset"] = data["subset"] == subset_value
+    # clusters that contains too few cells in the subset are discarded
+    # 1) the proportion of cells from the subset in the cluster is too low
+    valid_p = data.groupby("cluster").mean()["in_subset"] > subset_percent_per_cluster
+    # 2) the number of cells from the subset in the cluster is too low
+    valid_n = data.groupby("cluster")["in_subset"].sum() > min_cell_per_cluster
+    valid_clusters = valid_p & valid_n
+    valid_clusters = valid_clusters[valid_clusters].index
+
+    cell_mask = data["cluster"].isin(valid_clusters)  #  & data["in_subset"]
+    # TODO: #REPRODUCE# above, the commented part is for reproducibility of the main paper figures
+    # will be added later once published (it does not change much)
+    adata_subset = adata[cell_mask]
+    return adata_subset
+
+
 def find_cluster_with_marker(
     adata,
     marker,
     subset_column=None,
     subset_value=None,
+    subset_percent_per_cluster=0.3,
     cluster_key="decipher_clusters",
     min_cell_per_cluster=10,
 ):
@@ -175,21 +234,26 @@ def find_cluster_with_marker(
         The minimum number of cells per cluster to consider it. If a cluster has fewer cells than
         this, it is discarded. It is especially useful when subsetting the cells.
     """
+    if subset_column is not None:
+        adata = _subset_cells_and_clusters(
+            adata,
+            subset_column,
+            subset_value,
+            subset_percent_per_cluster=subset_percent_per_cluster,
+            min_cell_per_cluster=min_cell_per_cluster,
+            cluster_key=cluster_key,
+        )
     marker_data = pd.DataFrame(adata[:, marker].X.toarray())
     marker_data["cluster"] = adata.obs[cluster_key].values
-    if subset_column is not None:
-        marker_data["subset"] = adata.obs[subset_column].values
-        marker_data = marker_data[marker_data["subset"] == subset_value]
-    valid_cluster = marker_data.groupby("cluster").count()[0] > min_cell_per_cluster
+    # get the proportion of cells in each cluster that are in the subset
     marker_data = marker_data.groupby("cluster").mean()
-    marker_data = marker_data[valid_cluster]
     marker_data = marker_data.sort_values(by=0, ascending=False)
     return marker_data.index[0]
 
 
 def trajectories(
     adata,
-    start_end_clusters_dict,
+    trajectories_config,
     resolution=50,
     cluster_key="decipher_clusters",
 ):
@@ -199,9 +263,8 @@ def trajectories(
     ----------
     adata : AnnData
         The AnnData object.
-    start_end_clusters_dict : dict
-        A dictionary with the name of the trajectory as key and a tuple of the start and end cluster
-        as value.
+    trajectories_config : dict
+        A dictionary with TODO
     resolution : int
         The number of points per unit of length.
     cluster_key : str
@@ -222,26 +285,45 @@ def trajectories(
     """
     rep_key = "decipher_v_corrected"
     uns_key = "trajectories"
-
-    cells_locations = pd.DataFrame(adata.obsm[rep_key])
-    cells_locations["cluster_id"] = adata.obs[cluster_key].values
-    cluster_locations = cells_locations.groupby("cluster_id").mean()
-
-    graph = nx.Graph()
-    for i, (x, y) in cluster_locations[[0, 1]].iterrows():
-        graph.add_node(i, x=x, y=y, xy=np.array([x, y]))
-
-    distance_func = scipy.spatial.distance.euclidean
-    for n1, n2 in itertools.combinations(graph.nodes, r=2):
-        n1_data, n2_data = graph.nodes[n1], graph.nodes[n2]
-        distance = distance_func(n1_data["xy"], n2_data["xy"])
-        graph.add_edge(n1, n2, weight=distance)
-
-    tree = nx.minimum_spanning_tree(graph)
-
     create_decipher_uns_key(adata)
-    for t_name, (start_cluster, end_cluster) in start_end_clusters_dict.items():
-        t_cluster_ids = nx.shortest_path(tree, start_cluster, end_cluster)
+
+    for t_name, t_config in trajectories_config.items():
+        if t_config.subset_column is not None:
+            adata_subset = _subset_cells_and_clusters(
+                adata,
+                t_config.subset_column,
+                t_config.subset_value,
+                t_config.subset_percent_per_cluster,
+                t_config.min_cell_per_cluster,
+                cluster_key=cluster_key,
+            )
+        else:
+            adata_subset = adata
+
+        cells_locations = pd.DataFrame(adata_subset.obsm[rep_key])
+        cells_locations["cluster_id"] = adata_subset.obs[cluster_key].values
+
+        valid_clusters = (
+            cells_locations.groupby("cluster_id").count()[0] > t_config.min_cell_per_cluster
+        )
+        cluster_locations = cells_locations.groupby("cluster_id").mean()
+        cluster_locations = cluster_locations[valid_clusters]
+
+        graph = nx.Graph()
+        for i, (x, y) in cluster_locations[[0, 1]].iterrows():
+            graph.add_node(i, x=x, y=y, xy=np.array([x, y]))
+
+        distance_func = scipy.spatial.distance.euclidean
+        for n1, n2 in itertools.combinations(graph.nodes, r=2):
+            n1_data, n2_data = graph.nodes[n1], graph.nodes[n2]
+            distance = distance_func(n1_data["xy"], n2_data["xy"])
+            graph.add_edge(n1, n2, weight=distance)
+        tree = nx.minimum_spanning_tree(graph)
+
+        start_cluster_id = t_config.get_start_cluster_id(adata)
+        end_cluster_id = t_config.get_end_cluster_id(adata)
+
+        t_cluster_ids = nx.shortest_path(tree, start_cluster_id, end_cluster_id)
         print(t_name, ":", t_cluster_ids)
         t_cluster_locations = np.array(
             [cluster_locations.loc[cluster_id, [0, 1]] for cluster_id in t_cluster_ids]
