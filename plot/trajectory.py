@@ -1,14 +1,26 @@
+import logging
+
 import numpy as np
 from matplotlib import pyplot as plt
 import seaborn as sns
+from sklearn.neighbors import KNeighborsClassifier
 
+from plot.model import plot_decipher_v
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(
+    format="%(asctime)s | %(levelname)s : %(message)s",
+    level=logging.INFO,  # stream=sys.stdout
+)
 
 # def cell_clusters(
 #     adata,
+#     color="decipher_cluster",
+#     show_tree=True,
 #     palette=None,
 #     ax=None,
 # ):
-#
+#     plot_decipher_v(adata, color, palette=palette, ax=ax)
 
 
 def trajectories(
@@ -54,6 +66,7 @@ def gene_patterns(
     gene_name,
     crop_to_min_length=False,
     smoothing_window=5,
+    cell_type_band_key=None,
     palette=None,
     label_palette=None,
     gene_patterns_names=None,
@@ -73,6 +86,7 @@ def gene_patterns(
         gene_patterns_names = [gene_patterns_names]
 
     fig = plt.figure(figsize=figsize)
+    ax = fig.gca()
     start_times = []
     end_times = []
 
@@ -80,15 +94,12 @@ def gene_patterns(
     for i, gp_name in enumerate(gene_patterns_names):
         gene_pattern = adata.uns["decipher"]["gene_patterns"][gp_name]
 
-        gene_pattern_mean = moving_average(
-            gene_pattern["mean"][:, gene_id].mean(axis=1), smoothing_window
-        )
-        gene_pattern_q25 = moving_average(
-            gene_pattern["q25"][:, gene_id].mean(axis=1), smoothing_window
-        )
-        gene_pattern_q75 = moving_average(
-            gene_pattern["q75"][:, gene_id].mean(axis=1), smoothing_window
-        )
+        gene_pattern_mean = gene_pattern["mean"][:, gene_id].mean(axis=1)
+        gene_pattern_mean = moving_average(gene_pattern_mean, smoothing_window)
+        gene_pattern_q25 = gene_pattern["q25"][:, gene_id].mean(axis=1)
+        gene_pattern_q25 = moving_average(gene_pattern_q25, smoothing_window)
+        gene_pattern_q75 = gene_pattern["q75"][:, gene_id].mean(axis=1)
+        gene_pattern_q75 = moving_average(gene_pattern_q75, smoothing_window)
         times = gene_pattern["times"]
 
         if palette is not None and gp_name in palette:
@@ -103,20 +114,11 @@ def gene_patterns(
         start_times.append(times[0])
         end_times.append(times[-1])
 
-        plt.fill_between(
-            times,
-            gene_pattern_q25,
-            gene_pattern_q75,
-            color=color,
-            alpha=0.3,
-        )
-        plt.plot(
-            times,
-            gene_pattern_mean,
-            label=label,
-            color=color,
-            linewidth=3,
-        )
+        ax.fill_between(times, gene_pattern_q25, gene_pattern_q75, color=color, alpha=0.3)
+        ax.plot(times, gene_pattern_mean, label=label, color=color, linewidth=3)
+    if cell_type_band_key is not None:
+        _add_cell_type_band(adata, gene_patterns_names[0], cell_type_band_key, ax, palette)
+
     if crop_to_min_length:
         plt.xlim(max(start_times), min(end_times))
     else:
@@ -128,3 +130,44 @@ def gene_patterns(
     plt.ylim(0)
     plt.legend(frameon=False)
     plt.title(gene_name, fontsize=18)
+
+
+def decipher_time(adata, **kwargs):
+    plot_decipher_v(adata, "decipher_time", **kwargs)
+
+
+def _add_cell_type_band(adata, trajectory_name, cell_type_key, ax, palette, n_neighbors=50):
+    trajectory = adata.uns["decipher"]["trajectories"][trajectory_name]
+    if (
+        "cell_types" not in trajectory
+        or trajectory["cell_types"]["key"] != cell_type_key
+        or (trajectory["cell_types"]["n_neighbors"] != n_neighbors)
+    ):
+        knc = KNeighborsClassifier(n_neighbors=n_neighbors)
+        knc.fit(adata.obsm[trajectory["rep_key"]], adata.obs[cell_type_key])
+        cell_types = knc.predict(trajectory["points"])
+        trajectory["cell_types"] = {
+            "key": cell_type_key,
+            "n_neighbors": n_neighbors,
+            "values": cell_types,
+        }
+
+    times = trajectory["times"]
+    cell_types = trajectory["cell_types"]["values"]
+
+    if palette is None:
+        logging.info("No palette provided for the cell types, using default.")
+        ct = np.unique(cell_types)
+        palette = dict(zip(ct, sns.color_palette(n_colors=len(ct))))
+
+    plt.scatter(
+        times,
+        np.zeros(len(times)) - 0.03,
+        c=[palette[c] for c in cell_types],
+        marker="s",
+        s=20,
+        transform=plt.gca().get_xaxis_transform(),
+        clip_on=False,
+        edgecolors=None,
+    )
+    ax.xaxis.labelpad = 10
