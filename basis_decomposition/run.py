@@ -57,15 +57,16 @@ def compute_basis_decomposition(
 
     pbar = tqdm(range(num_iterations))
 
+    losses = []
     for _ in pbar:
         # calculate the loss and take a gradient step
         loss = svi.step(times, gene_patterns)
         reconstruction = ((model._last_patterns - gene_patterns) ** 2).mean().item()
         reconstruction_rel = reconstruction / (gene_patterns ** 2).mean()
-
         pbar.set_description(
             "Loss: %.1f - Relative Error: %.2f%%" % (loss, reconstruction_rel * 100)
         )
+        losses.append(loss)
 
     model.return_basis = False
     predictive = Predictive(
@@ -76,7 +77,7 @@ def compute_basis_decomposition(
     gene_scales = model.gene_scales * gene_patterns_mean.squeeze(-1)
     samples = summary(samples)
 
-    return model, guide, times, samples, gene_scales
+    return model, guide, times, samples, gene_scales, losses
 
 
 def main():
