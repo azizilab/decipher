@@ -4,6 +4,7 @@ from .trajectory_inference import (
     trajectories,
     decipher_time,
     gene_patterns,
+    TConfig,
 )
 from .basis_decomposition import basis_decomposition
 

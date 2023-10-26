@@ -1,3 +1,5 @@
+import dataclasses
+import logging
 from dataclasses import dataclass
 from typing import Union
 
@@ -6,26 +8,49 @@ import pyro.distributions as dist
 import pyro.poutine as poutine
 import torch
 import torch.nn as nn
+import torch.utils.data
 from torch.distributions import constraints
 from torch.nn.functional import softmax, softplus
-import torch.utils.data
+
 from model.module import ConditionalDenseNN
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(
+    format="%(asctime)s | %(levelname)s : %(message)s",
+    level=logging.INFO,  # stream=sys.stdout
+)
 
 
 @dataclass(unsafe_hash=True)
 class DecipherConfig:
-    z_dim: int = 10
-    v_dim: int = 2
-    v_to_z_layers: tuple = (64,)
-    z_to_x_layers: tuple = tuple()
+    dim_z: int = 10
+    dim_v: int = 2
+    layers_v_to_z: tuple = (64,)
+    layers_z_to_x: tuple = tuple()
 
-    beta: float = 1.0
+    beta: float = 1e-1
     seed: int = 0
 
-    minibatch_rescaling: float = 1.0
     learning_rate: float = 5e-3
+    val_frac: float = 0.1
+    batch_size: int = 64
+    n_epochs: int = 61
 
+    dim_genes: int = None
+    n_cells: int = None
+    minibatch_rescaling: float = None
     prior: str = "normal"
+
+    _initialized_from_adata: bool = False
+
+    def initialize_from_adata(self, adata):
+        self.dim_genes = adata.shape[1]
+        self.n_cells = adata.shape[0]
+        self.minibatch_rescaling = adata.shape[0] / self.batch_size
+        self._initialized_from_adata = True
+
+    def to_dict(self):
+        return dataclasses.asdict(self)
 
 
 class Decipher(nn.Module):
@@ -35,43 +60,41 @@ class Decipher(nn.Module):
     ----------
     genes_dim : int
         Number of genes in the dataset.
-    decipher_config : DecipherConfig or dict
+    config : DecipherConfig or dict
         Configuration for the decipher model.
     """
 
     def __init__(
         self,
-        genes_dim,
-        decipher_config: Union[DecipherConfig, dict] = DecipherConfig(),
+        config: Union[DecipherConfig, dict] = DecipherConfig(),
     ):
         super().__init__()
-        self.genes_dim = genes_dim
-        if type(decipher_config) == dict:
-            decipher_config = DecipherConfig(**decipher_config)
+        if type(config) == dict:
+            config = DecipherConfig(**config)
 
-        self.prior = decipher_config.prior
-        self.z_dim = decipher_config.z_dim
-        self.v_sim = decipher_config.v_dim
+        if not config._initialized_from_adata:
+            raise ValueError(
+                "DecipherConfig must be initialized from an AnnData object, "
+                "use `DecipherConfig.initialize_from_adata(adata)` to do so."
+            )
 
-        self.minibatch_rescaling = decipher_config.minibatch_rescaling
+        self.config = config
+
+        self.minibatch_rescaling = config.minibatch_rescaling
         self.decoder_v_to_z = ConditionalDenseNN(
-            self.v_sim,
-            decipher_config.v_to_z_layers,
-            [self.z_dim, self.z_dim],
+            self.config.dim_v, self.config.layers_v_to_z, [self.config.dim_z] * 2
         )
         self.decoder_z_to_x = ConditionalDenseNN(
-            self.z_dim, decipher_config.z_to_x_layers, [self.genes_dim]
+            self.config.dim_z, config.layers_z_to_x, [self.config.dim_genes]
         )
-        self.encoder_x_to_z = ConditionalDenseNN(self.genes_dim, [128], [self.z_dim, self.z_dim])
+        self.encoder_x_to_z = ConditionalDenseNN(
+            self.config.dim_genes, [128], [self.config.dim_z] * 2
+        )
         self.encoder_zx_to_v = ConditionalDenseNN(
-            self.genes_dim + self.z_dim,
-            [128],
-            [self.v_sim, self.v_sim],
+            self.config.dim_genes + self.config.dim_z, [128], [self.config.dim_v, self.config.dim_v]
         )
 
         self._epsilon = 5e-3
-        self.beta = decipher_config.beta
-        self.decipher_config = decipher_config
 
         self.theta = None
         print("V5")
@@ -81,7 +104,7 @@ class Decipher(nn.Module):
 
         self.theta = pyro.param(
             "inverse_dispersion",
-            1.0 * x.new_ones(self.genes_dim),
+            1.0 * x.new_ones(self.config.dim_genes),
             constraint=constraints.positive,
         )
 
@@ -113,12 +136,13 @@ class Decipher(nn.Module):
 
     def guide(self, x, context=None):
         pyro.module("decipher", self)
-        with pyro.plate("batch", len(x)), poutine.scale(scale=self.minibatch_rescaling):
+        with pyro.plate("batch", len(x)), poutine.scale(scale=self.config.minibatch_rescaling):
             x = torch.log1p(x)
 
             z_loc, z_scale = self.encoder_x_to_z(x, context=context)
             z_scale = softplus(z_scale)
-            z = pyro.sample("z", dist.Normal(z_loc, z_scale).to_event(1))
+            posterior_z = dist.Normal(z_loc, z_scale).to_event(1)
+            z = pyro.sample("z", posterior_z)
 
             zx = torch.cat([z, x], dim=-1)
             p_loc, p_scale = self.encoder_zx_to_v(zx, context=context)
@@ -138,26 +162,3 @@ class Decipher(nn.Module):
         mu = softmax(mu, dim=-1)
         library_size = x.sum(axis=-1, keepdim=True)
         return library_size * mu
-
-
-def make_data_loader_from_adata(adata, batch_size=64, context_discrete_keys=None):
-    genes = torch.FloatTensor(adata.X.todense())
-    params = [genes]
-    context_tensors = []
-    if context_discrete_keys is None:
-        context_discrete_keys = []
-
-    for key in context_discrete_keys:
-        t = torch.IntTensor(adata.obs[key].astype("category").cat.codes.values).long()
-        encoded = torch.nn.functional.one_hot(t).float()
-        context_tensors.append(encoded)
-
-    if context_tensors:
-        context = torch.cat(context_tensors, dim=-1)
-        params.append(context)
-
-    return torch.utils.data.DataLoader(
-        torch.utils.data.TensorDataset(*params),
-        batch_size=batch_size,
-        shuffle=True,
-    )
