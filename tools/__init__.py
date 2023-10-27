@@ -7,5 +7,8 @@ from .trajectory_inference import (
     TConfig,
 )
 from .basis_decomposition import basis_decomposition
+from model.training import decipher_train, decipher_rotate_space
+from model.data import load_decipher_model as decipher_load_model
+from model.decipher import DecipherConfig
 
 # from .post_analysis import *

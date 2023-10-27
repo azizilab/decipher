@@ -283,7 +283,7 @@ def trajectories(
         - density: the density of points along the trajectory
 
     """
-    rep_key = "decipher_v_corrected"
+    rep_key = "decipher_v"
     uns_key = "trajectories"
     create_decipher_uns_key(adata)
 
@@ -399,10 +399,10 @@ def gene_patterns(adata, l_scale=10_000, n_samples=100):
         t_times = adata.uns["decipher"]["trajectories"][t_name]["times"]
 
         # TODO: deprecated
-        if "decipher_rotation" in adata.uns:
+        if "rotation" in adata.uns["decipher"]:
             print("undoing rotation")
             # need to undo rotation of the decipher_v_corrected space
-            t_points = t_points @ np.linalg.inv(adata.uns["decipher_rotation"])
+            t_points = t_points @ np.linalg.inv(adata.uns["decipher"]["rotation"])
 
         t_points = torch.FloatTensor(t_points)
         z_mean, z_scale = model.decoder_v_to_z(t_points)
