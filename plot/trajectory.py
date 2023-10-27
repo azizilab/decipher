@@ -13,28 +13,19 @@ logging.basicConfig(
     level=logging.INFO,  # stream=sys.stdout
 )
 
-# def cell_clusters(
-#     adata,
-#     color="decipher_cluster",
-#     show_tree=True,
-#     palette=None,
-#     ax=None,
-# ):
-#     plot_decipher_v(adata, color, palette=palette, ax=ax)
-
 
 def trajectories(
     adata,
+    color=None,
     trajectory_names=None,
     palette=None,
-    ax=None,
 ):
+    fig = plot_decipher_v(adata, color=color, palette=palette)
+    ax = fig.axes[0]
     if trajectory_names is None:
         trajectory_names = adata.uns["decipher"]["trajectories"].keys()
     if type(trajectory_names) == str:
         trajectory_names = [trajectory_names]
-    if ax is None:
-        ax = plt.gca()
 
     default_color_palette = sns.color_palette(n_colors=len(trajectory_names))
     for i, t_name in enumerate(trajectory_names):
@@ -66,11 +57,12 @@ def gene_patterns(
     gene_name,
     crop_to_min_length=False,
     smoothing_window=5,
-    cell_type_band_key=None,
+    cell_type_key=None,
     palette=None,
     label_palette=None,
-    gene_patterns_names=None,
-    figsize=[3, 2.3],
+    pattern_names=None,
+    figsize=(3, 2.3),
+    include_uncertainty=True,
 ):
     if type(gene_name) == list:
         gene_id = [adata.var_names.tolist().index(gn) for gn in gene_name]
@@ -80,19 +72,19 @@ def gene_patterns(
     def moving_average(x, w):
         return np.convolve(x, np.ones(w), "same") / np.convolve(np.ones_like(x), np.ones(w), "same")
 
-    if gene_patterns_names is None:
-        gene_patterns_names = list(adata.uns["decipher"]["gene_patterns"].keys())
-    elif type(gene_patterns_names) == str:
-        gene_patterns_names = [gene_patterns_names]
+    if pattern_names is None:
+        pattern_names = list(adata.uns["decipher"]["gene_patterns"].keys())
+    elif type(pattern_names) == str:
+        pattern_names = [pattern_names]
 
     fig = plt.figure(figsize=figsize)
     ax = fig.gca()
     start_times = []
     end_times = []
 
-    default_color_palette = sns.color_palette(n_colors=len(gene_patterns_names))
-    for i, gp_name in enumerate(gene_patterns_names):
-        gene_pattern = adata.uns["decipher"]["gene_patterns"][gp_name]
+    default_color_palette = sns.color_palette(n_colors=len(pattern_names))
+    for i, p_name in enumerate(pattern_names):
+        gene_pattern = adata.uns["decipher"]["gene_patterns"][p_name]
 
         gene_pattern_mean = gene_pattern["mean"][:, gene_id].mean(axis=1)
         gene_pattern_mean = moving_average(gene_pattern_mean, smoothing_window)
@@ -102,22 +94,23 @@ def gene_patterns(
         gene_pattern_q75 = moving_average(gene_pattern_q75, smoothing_window)
         times = gene_pattern["times"]
 
-        if palette is not None and gp_name in palette:
-            color = palette[gp_name]
+        if palette is not None and p_name in palette:
+            color = palette[p_name]
         else:
             color = default_color_palette[i]
-        if label_palette is not None and gp_name in label_palette:
-            label = label_palette[gp_name]
+        if label_palette is not None and p_name in label_palette:
+            label = label_palette[p_name]
         else:
-            label = gp_name
+            label = p_name
 
         start_times.append(times[0])
         end_times.append(times[-1])
 
-        ax.fill_between(times, gene_pattern_q25, gene_pattern_q75, color=color, alpha=0.3)
+        if include_uncertainty:
+            ax.fill_between(times, gene_pattern_q25, gene_pattern_q75, color=color, alpha=0.3)
         ax.plot(times, gene_pattern_mean, label=label, color=color, linewidth=3)
-    if cell_type_band_key is not None:
-        _add_cell_type_band(adata, gene_patterns_names[0], cell_type_band_key, ax, palette)
+    if cell_type_key is not None:
+        _add_cell_type_band(adata, pattern_names[0], cell_type_key, ax, palette)
 
     if crop_to_min_length:
         plt.xlim(max(start_times), min(end_times))
@@ -133,7 +126,7 @@ def gene_patterns(
 
 
 def decipher_time(adata, **kwargs):
-    plot_decipher_v(adata, "decipher_time", **kwargs)
+    return plot_decipher_v(adata, "decipher_time", **kwargs)
 
 
 def _add_cell_type_band(adata, trajectory_name, cell_type_key, ax, palette, n_neighbors=50):

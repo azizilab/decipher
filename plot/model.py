@@ -3,12 +3,24 @@ import scanpy as sc
 from matplotlib import pyplot as plt
 
 
-def decipher_z(adata, basis="decipher_v_corrected", decipher_z_key_prefix="decipher_z", **kwargs):
+def decipher_z(
+    adata,
+    basis="decipher_v",
+    decipher_z_key="decipher_z",
+    subset_of_zs=None,
+    **kwargs,
+):
+    dim_z = adata.obsm[decipher_z_key].shape[1]
+    for i in range(dim_z):
+        adata.obs["z%d" % (i + 1)] = adata.obsm[decipher_z_key][:, i]
 
-    sc.pl.embedding(
+    if subset_of_zs is None:
+        subset_of_zs = list(range(1, dim_z + 1))
+
+    return sc.pl.embedding(
         adata,
-        basis="decipher_v_corrected",
-        color=["z%d" % (i) for i in range(1, 11)],
+        basis=basis,
+        color=[f"z{i}" for i in subset_of_zs],
         vmax=lambda xs: np.quantile(xs, 0.99),
         vmin=lambda xs: np.quantile(xs, 0.01),
         color_map="cool_r",
@@ -16,6 +28,7 @@ def decipher_z(adata, basis="decipher_v_corrected", decipher_z_key_prefix="decip
         show=False,
         sort_order=False,
         return_fig=True,
+        **kwargs,
     )
 
 
@@ -31,7 +44,7 @@ def decipher(
     y_label="Decipher 2",
     axis_type="arrow",
     figsize=(3.5, 3.5),
-    **kwargs
+    **kwargs,
 ):
     with plt.rc_context({"figure.figsize": figsize}):
         fig = sc.pl.embedding(
@@ -42,7 +55,7 @@ def decipher(
             return_fig=True,
             frameon=(axis_type in ["line", "arrow"]),
             ncols=ncols,
-            **kwargs
+            **kwargs,
         )
     ax = fig.axes[0]
     if color is None or type(color) == str:

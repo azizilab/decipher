@@ -6,7 +6,7 @@ from .trajectory_inference import (
     gene_patterns,
     TConfig,
 )
-from .basis_decomposition import basis_decomposition
+from .basis_decomposition import basis_decomposition, disruption_scores
 from model.training import decipher_train, decipher_rotate_space
 from model.data import load_decipher_model as decipher_load_model
 from model.decipher import DecipherConfig
