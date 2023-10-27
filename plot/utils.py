@@ -7,8 +7,8 @@ def activate_journal_quality():
     import scanpy as sc
     import matplotlib as mpl
 
-    sc.settings.set_figure_params(dpi_save=1000, vector_friendly=True, fontsize=18)
-    mpl.rcParams['pdf.fonttype'] = 42
-    mpl.rcParams['ps.fonttype'] = 42
+    sc.settings.set_figure_params(dpi_save=400, vector_friendly=True, fontsize=18)
+    mpl.rcParams["pdf.fonttype"] = 42
+    mpl.rcParams["ps.fonttype"] = 42
 
-    plt.rcParams['axes.grid'] = False
+    plt.rcParams["axes.grid"] = False
