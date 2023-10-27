@@ -11,25 +11,25 @@ from basis_decomposition.run import (
 
 def basis_decomposition(
     adata,
-    gene_patterns_names=None,
+    pattern_names=None,
     n_basis=5,
     n_iter=10_000,
     lr=1e-2,
     beta_prior=1,
     seed=0,
 ):
-    if gene_patterns_names is None:
-        gene_patterns_names = list(adata.uns["decipher"]["gene_patterns"].keys())
+    if pattern_names is None:
+        pattern_names = list(adata.uns["decipher"]["gene_patterns"].keys())
     gene_patterns = [
-        adata.uns["decipher"]["gene_patterns"][gp_name]["mean"] for gp_name in gene_patterns_names
+        adata.uns["decipher"]["gene_patterns"][gp_name]["mean"] for gp_name in pattern_names
     ]
     min_len = min([gp.shape[0] for gp in gene_patterns])
     gene_patterns = [gp[:min_len].T for gp in gene_patterns]
     gene_patterns = np.stack(gene_patterns, axis=0)
 
     # assume all gene patterns have the same times (it is the case for decipher)
-    gp_name = gene_patterns_names[0]
-    gene_patterns_times = adata.uns["decipher"]["gene_patterns"][gp_name]["times"][:min_len]
+    p_name = pattern_names[0]
+    gene_patterns_times = adata.uns["decipher"]["gene_patterns"][p_name]["times"][:min_len]
 
     trajectory_model, guide, times, samples, gene_scales, losses = run_compute_basis_decomposition(
         gene_patterns,
@@ -52,9 +52,12 @@ def basis_decomposition(
         "length": min_len,
         "gene_patterns_reconstruction": {
             gp_name: samples["_RETURN"]["mean"][i].squeeze().detach().numpy()
-            for i, gp_name in enumerate(gene_patterns_names)
+            for i, gp_name in enumerate(pattern_names)
         },
+        "pattern_names": pattern_names,
     }
+    for i, p_name in enumerate(pattern_names):
+        adata.varm[f"decipher_betas_{p_name}"] = betas[i, :, :]
 
     return losses
 
@@ -85,13 +88,10 @@ def disruption_scores(adata):
                 combined_disruption,
             )
         )
-    disruptions = pd.DataFrame(disruptions, columns=["gene", "shape", "scale", "combined"])
-
-    gene_mean = adata.X.toarray().mean(axis=0)
-    gene_std = adata.X.toarray().std(axis=0)
-    disruptions["gene_mean"] = gene_mean
-    disruptions["gene_std"] = gene_std
-
-    adata.uns["decipher"]["disruption_scores"] = disruptions.sort_values(
-        "combined", ascending=False
-    )
+    disruptions = pd.DataFrame(
+        disruptions, columns=["gene", "shape", "scale", "combined"]
+    ).set_index("gene")
+    adata.var["decipher_disruption_shape"] = disruptions["shape"]
+    adata.var["decipher_disruption_scale"] = disruptions["scale"]
+    adata.var["decipher_disruption_combined"] = disruptions["combined"]
+    return disruptions
