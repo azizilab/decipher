@@ -5,7 +5,7 @@ from matplotlib import pyplot as plt
 import seaborn as sns
 from sklearn.neighbors import KNeighborsClassifier
 
-from plot.model import plot_decipher_v
+from plot.model import decipher as plot_decipher_v
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(

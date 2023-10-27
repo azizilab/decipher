@@ -3,9 +3,7 @@ import scanpy as sc
 from matplotlib import pyplot as plt
 
 
-def plot_decipher_z(
-    adata, basis="decipher_v_corrected", decipher_z_key_prefix="decipher_z", **kwargs
-):
+def decipher_z(adata, basis="decipher_v_corrected", decipher_z_key_prefix="decipher_z", **kwargs):
 
     sc.pl.embedding(
         adata,
@@ -21,19 +19,18 @@ def plot_decipher_z(
     )
 
 
-def plot_decipher_v(
+def decipher(
     adata,
-    color,
-    title="",
-    show_axis="arrow",
-    figsize=(3.5, 3.5),
+    color=None,
     palette=None,
+    ncols=2,
     subsample_frac=1.0,
+    title="",
+    basis="decipher_v",
     x_label="Decipher 1",
     y_label="Decipher 2",
-    ncols=2,
-    ax_label_only_on_bottom_right=False,
-    basis="decipher_v_corrected",
+    axis_type="arrow",
+    figsize=(3.5, 3.5),
     **kwargs
 ):
     with plt.rc_context({"figure.figsize": figsize}):
@@ -43,29 +40,32 @@ def plot_decipher_v(
             color=color,
             palette=palette,
             return_fig=True,
-            frameon=(show_axis in [True, "arrow"]),
+            frameon=(axis_type in ["line", "arrow"]),
             ncols=ncols,
             **kwargs
         )
     ax = fig.axes[0]
-    if type(color) == str or len(color) == 1:
+    if color is None or type(color) == str:
+        color = [color]
+
+    if len(color) == 1:
         ax.set_title(title)
 
     # set labels and remove spines
-    for i, ax in enumerate(fig.axes[::]):
+    for i, ax in enumerate(fig.axes):
         if ax._label == "<colorbar>":
             continue
-        if show_axis == "arrow":
+        if axis_type == "arrow":
             ax.spines["top"].set_visible(False)
             ax.spines["right"].set_visible(False)
             ax.plot(1, 0, ">k", transform=ax.transAxes, clip_on=False)
             ax.plot(0, 1, "^k", transform=ax.transAxes, clip_on=False)
 
-            if i % ncols == 0 or not ax_label_only_on_bottom_right:
+            if i % ncols == 0:
                 ax.set_ylabel(y_label)
             else:
                 ax.set_ylabel(None)
-            if i // ncols == (len(color) - 1) // ncols or not ax_label_only_on_bottom_right:
+            if i // ncols == (len(color) - 1) // ncols:
                 ax.set_xlabel(x_label)
             else:
                 ax.set_xlabel(None)

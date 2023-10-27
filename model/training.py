@@ -19,7 +19,7 @@ sdc.tl.decipher(adata, ...) should :
     - add the latent space to adata.obsm
 """
 
-from plot.model import plot_decipher_v
+from plot.model import decipher as plot_decipher_v
 import scanpy as sc
 
 
