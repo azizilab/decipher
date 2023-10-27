@@ -1,6 +1,5 @@
 import itertools
 import logging
-import sys
 
 import networkx as nx
 import numpy as np
@@ -8,8 +7,6 @@ import pandas as pd
 import scanpy as sc
 import scipy.spatial
 import torch.nn.functional
-
-# from sklearn.neighbors import KNeighborsClassifier
 
 from model.data import load_decipher_model
 from utils import create_decipher_uns_key
@@ -27,7 +24,7 @@ class Trajectory:
         cluster_locations,
         cluster_ids,
         point_density=50,
-        rep_key="decipher_v_corrected",
+        rep_key="decipher_v",
     ):
         self._point_density = point_density
         self.cluster_ids = cluster_ids
@@ -152,7 +149,7 @@ class TConfig:
         return self._compute_cluster_id(adata, self._end_cluster)
 
 
-def cell_clusters(adata, leiden_resolution=1.0, seed=0, rep_key="decipher_z_corrected"):
+def cell_clusters(adata, leiden_resolution=1.0, n_neighbors=10, seed=0, rep_key="decipher_z"):
 
     logger.info("Clustering cells using scanpy Leiden algorithm.")
     neighbors_key = rep_key + "_neighbors"
@@ -162,7 +159,7 @@ def cell_clusters(adata, leiden_resolution=1.0, seed=0, rep_key="decipher_z_corr
     )
     sc.pp.neighbors(
         adata,
-        n_neighbors=10,
+        n_neighbors=n_neighbors,
         random_state=seed,
         use_rep=rep_key,
         key_added=neighbors_key,
@@ -359,7 +356,7 @@ def decipher_time(adata, n_neighbors=10):
         cells_on_trajectory_idx = np.where(is_on_trajectory)[0]
 
         adata.obs.loc[cells_on_trajectory_index, "decipher_time"] = knn.predict(
-            adata.obsm["decipher_v_corrected"][cells_on_trajectory_idx]
+            adata.obsm["decipher_v"][cells_on_trajectory_idx]
         )
 
 
@@ -400,8 +397,7 @@ def gene_patterns(adata, l_scale=10_000, n_samples=100):
 
         # TODO: deprecated
         if "rotation" in adata.uns["decipher"]:
-            print("undoing rotation")
-            # need to undo rotation of the decipher_v_corrected space
+            # need to undo rotation of the decipher_v space
             t_points = t_points @ np.linalg.inv(adata.uns["decipher"]["rotation"])
 
         t_points = torch.FloatTensor(t_points)
