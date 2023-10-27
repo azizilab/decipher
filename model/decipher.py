@@ -1,8 +1,9 @@
 import dataclasses
 import logging
 from dataclasses import dataclass
-from typing import Union
+from typing import Sequence, Union
 
+import numpy as np
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
@@ -25,8 +26,8 @@ logging.basicConfig(
 class DecipherConfig:
     dim_z: int = 10
     dim_v: int = 2
-    layers_v_to_z: tuple = (64,)
-    layers_z_to_x: tuple = tuple()
+    layers_v_to_z: Sequence = (64,)
+    layers_z_to_x: Sequence = tuple()
 
     beta: float = 1e-1
     seed: int = 0
@@ -34,7 +35,7 @@ class DecipherConfig:
     learning_rate: float = 5e-3
     val_frac: float = 0.1
     batch_size: int = 64
-    n_epochs: int = 61
+    n_epochs: int = 100
 
     dim_genes: int = None
     n_cells: int = None
@@ -50,7 +51,10 @@ class DecipherConfig:
         self._initialized_from_adata = True
 
     def to_dict(self):
-        return dataclasses.asdict(self)
+        res = dataclasses.asdict(self)
+        res["layers_v_to_z"] = list(res["layers_v_to_z"])
+        res["layers_z_to_x"] = list(res["layers_z_to_x"])
+        return res
 
 
 class Decipher(nn.Module):
@@ -114,8 +118,14 @@ class Decipher(nn.Module):
                     v = pyro.sample("v", dist.Normal(0, x.new_ones(self.v_sim)).to_event(1))
                 elif self.prior == "gamma":
                     v = pyro.sample("v", dist.Gamma(0.3, x.new_ones(self.v_sim) * 0.8).to_event(1))
+            with poutine.scale(scale=self.config.beta):
+                if self.config.prior == "normal":
+                    prior = dist.Normal(0, x.new_ones(self.config.dim_v)).to_event(1)
+                elif self.config.prior == "gamma":
+                    prior = dist.Gamma(0.3, x.new_ones(self.config.dim_v) * 0.8).to_event(1)
                 else:
                     raise ValueError("Invalid prior, must be normal or gamma")
+                v = pyro.sample("v", prior)
 
             z_loc, z_scale = self.decoder_v_to_z(v, context=context)
             z_scale = softplus(z_scale)
@@ -145,19 +155,55 @@ class Decipher(nn.Module):
             z = pyro.sample("z", posterior_z)
 
             zx = torch.cat([z, x], dim=-1)
-            p_loc, p_scale = self.encoder_zx_to_v(zx, context=context)
-            p_scale = softplus(p_scale)
-            with poutine.scale(scale=self.beta):
-                if self.prior == "gamma":
-                    pyro.sample("v", dist.Gamma(softplus(p_loc), p_scale).to_event(1))
-                elif self.prior == "normal" or self.prior == "student-normal":
-                    pyro.sample("v", dist.Normal(p_loc, p_scale).to_event(1))
+            v_loc, v_scale = self.encoder_zx_to_v(zx, context=context)
+            v_scale = softplus(v_scale)
+            with poutine.scale(scale=self.config.beta):
+                if self.config.prior == "gamma":
+                    posterior_v = dist.Gamma(softplus(v_loc), v_scale).to_event(1)
+                elif self.config.prior == "normal" or self.config.prior == "student-normal":
+                    posterior_v = dist.Normal(v_loc, v_scale).to_event(1)
                 else:
                     raise ValueError("Invalid prior, must be normal or gamma")
-        return z_loc, p_loc
+                pyro.sample("v", posterior_v)
+        return z_loc, v_loc, z_scale, v_scale
+
+    def compute_v_z(self, x: np.array, return_scale=False):
+        """Compute decipher_v and decipher_z for a given input.
+
+        Parameters
+        ----------
+        x : np.ndarray or torch.Tensor
+            Input data of shape (n_cells, n_genes).
+
+        return_scale : bool (default: False)
+            Whether to return the scale of the posterior distributions.
+
+        Returns
+        -------
+        v : np.ndarray
+            Decipher components v of shape (n_cells, dim_v).
+        z : np.ndarray
+            Decipher latent z of shape (n_cells, dim_z).
+        If return_scale is True, also returns:
+        v_scale : np.ndarray
+            Scale of the posterior distribution of v.
+        z_scale : np.ndarray
+            Scale of the posterior distribution of z.
+        """
+        if type(x) == np.ndarray:
+            x = torch.tensor(x, dtype=torch.float32)
+        z_loc, v_loc, z_scale, v_scale = self.guide(x)
+        if return_scale:
+            return (
+                v_loc.detach().numpy(),
+                z_loc.detach().numpy(),
+                v_scale.detach().numpy(),
+                z_scale.detach().numpy(),
+            )
+        return v_loc.detach().numpy(), z_loc.detach().numpy()
 
     def impute_data(self, x):
-        z_loc, _ = self.guide(x)
+        z_loc, _, _, _ = self.guide(x)
         mu = self.decoder_z_to_x(z_loc)
         mu = softmax(mu, dim=-1)
         library_size = x.sum(axis=-1, keepdim=True)

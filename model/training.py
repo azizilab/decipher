@@ -113,9 +113,9 @@ def rot(t, u=1):
 def decipher_rotate_space(
     adata,
     v1_col=None,
-    v1_values=None,
+    v1_order=None,
     v2_col=None,
-    v2_values=None,
+    v2_order=None,
     auto_flip_decipher_z=True,
 ):
     """Rotate and flip the decipher space v to maximize the correlation of each decipher component
@@ -128,14 +128,14 @@ def decipher_rotate_space(
     v1_col: str (optional)
         Column name in `adata.obs` to align the first decipher component with.
         If None, only align the second component (or does not align at all if `v2` is also None).
-    v1_values: list (optional)
+    v1_order: list (optional)
         Ordered list of categorical values in `adata.obs[v1]` to use for the alignment. The
         alignment will attempt to align the ordered values in `v1_values` along `v1`.
         Must be provided if `adata.obs[v1]` is not numeric.
     v2_col: str (optional)
         Column name in `adata.obs` to align the second decipher component with.
         If None, only align the first component (or does not align at all if `v1` is also None).
-    v2_values: list (optional)
+    v2_order: list (optional)
         Ordered list of categorical values in `adata.obs[v2]` to use for the alignment. The
         alignment will attempt to align the ordered values in `v2_values` along `v2`.
         Must be provided if `adata.obs[v2]` is not numeric.
@@ -146,19 +146,19 @@ def decipher_rotate_space(
     decipher = load_decipher_model(adata)
     _decipher_to_adata(decipher, adata)
 
-    def process_col_obs(v_col, v_values):
+    def process_col_obs(v_col, v_order):
         if v_col is not None:
             v_obs = adata.obs[v_col]
-            if v_values is not None:
-                v_obs = v_obs.astype("category").cat.set_categories(v_values)
+            if v_order is not None:
+                v_obs = v_obs.astype("category").cat.set_categories(v_order)
                 v_obs = v_obs.cat.codes.replace(-1, np.nan)
             v_valid_cells = ~v_obs.isna()
             v_obs = v_obs[v_valid_cells].astype(float)
             return v_obs, v_valid_cells
         return None, None
 
-    v1_obs, v1_valid_cells = process_col_obs(v1_col, v1_values)
-    v2_obs, v2_valid_cells = process_col_obs(v2_col, v2_values)
+    v1_obs, v1_valid_cells = process_col_obs(v1_col, v1_order)
+    v2_obs, v2_valid_cells = process_col_obs(v2_col, v2_order)
 
     def score_rotation(r):
         rotated_space = adata.obsm["decipher_v"] @ r

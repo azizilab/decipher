@@ -46,7 +46,7 @@ def save_decipher_model(adata, model):
 
 def load_decipher_model(adata):
     create_decipher_uns_key(adata)
-    if "model_run_id" not in adata.uns["decipher"]:
+    if "run_id" not in adata.uns["decipher"]:
         raise ValueError("No decipher model has been saved for this AnnData object.")
 
     model_config = DecipherConfig(**adata.uns["decipher"]["config"])
