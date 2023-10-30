@@ -3,7 +3,7 @@ import seaborn as sns
 
 
 def basis(adata, colors=None, figsize=(5, 2.5), linewidth=3, ax=None):
-    bases = adata.uns["decipher"]["_basis_decomposition"]["basis"]
+    bases = adata.uns["decipher"]["basis_decomposition"]["basis"]
     if ax is None:
         fig = plt.figure(figsize=figsize)
         ax = fig.gca()
@@ -34,8 +34,8 @@ def gene_patterns_decomposition(
     figsize=(7, 2),
 ):
     gene_id = adata.var_names.tolist().index(gene_name)
-    pattern_id = adata.uns["decipher"]["_basis_decomposition"]["pattern_names"].index(pattern_name)
-    max_length = adata.uns["decipher"]["_basis_decomposition"]["length"]
+    pattern_id = adata.uns["decipher"]["basis_decomposition"]["pattern_names"].index(pattern_name)
+    max_length = adata.uns["decipher"]["basis_decomposition"]["length"]
     fig, axes = plt.subplots(1, 3, gridspec_kw={"width_ratios": [3, 3, 1]}, figsize=figsize)
 
     plot_gene_patterns(
@@ -48,7 +48,7 @@ def gene_patterns_decomposition(
         max_length=max_length,
     )
 
-    beta = adata.uns["decipher"]["_basis_decomposition"]["betas"][pattern_id, gene_id]
+    beta = adata.uns["decipher"]["basis_decomposition"]["betas"][pattern_id, gene_id]
     n_basis = beta.shape[0]
     if basis_colors is None:
         basis_colors = sns.color_palette("Accent", n_colors=n_basis)

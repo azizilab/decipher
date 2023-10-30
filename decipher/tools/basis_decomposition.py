@@ -42,11 +42,11 @@ def basis_decomposition(
         times=gene_patterns_times,
     )
     gene_scales = gene_scales.detach().numpy()
-    betas = samples["beta"]["mean"].squeeze().detach().numpy()
     basis = get_basis(trajectory_model, guide, gene_patterns, times)
-    adata.uns["decipher"]["_basis_decomposition"] = {
+    adata.uns["decipher"]["basis_decomposition"] = {
         "scales": gene_scales,
-        "betas": betas,
+        "betas": samples["beta"]["mean"].squeeze().detach().numpy(),
+        "betas_samples": samples["beta"]["values"].squeeze().detach().numpy(),
         "basis": basis,
         "times": times.detach().numpy(),
         "length": min_len,
@@ -71,15 +71,15 @@ def disruption_scores(adata):
     """
     disruptions = []
     for g_id in range(len(adata.var_names)):
-        beta_g = adata.uns["decipher"]["_basis_decomposition"]["betas"][:, g_id, :]
-        gene_scales = adata.uns["decipher"]["_basis_decomposition"]["scales"][:, g_id]
+        beta_g = adata.uns["decipher"]["basis_decomposition"]["betas"][:, g_id, :]
+        gene_scales = adata.uns["decipher"]["basis_decomposition"]["scales"][:, g_id]
+
         shape_disruption = np.linalg.norm(beta_g[0] - beta_g[1], ord=2)
         scale_disruption = abs(np.log(gene_scales[0]) - np.log(gene_scales[1]))
-        combined_disruption = abs(
-            np.linalg.norm(
-                np.log(gene_scales[0] * beta_g[0]) - np.log(gene_scales[1] * beta_g[1]), ord=2
-            )
+        combined_disruption = np.linalg.norm(
+            np.log(gene_scales[0] * beta_g[0]) - np.log(gene_scales[1] * beta_g[1]), ord=2
         )
+
         disruptions.append(
             (
                 adata.var_names[g_id],
