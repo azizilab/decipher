@@ -28,13 +28,18 @@ def get_random_name(seed=None):
     return f"{datetime_str}-{name}"
 
 
-def decipher_save_model(adata, model):
+def decipher_save_model(adata, model, overwrite=False):
     create_decipher_uns_key(adata)
-    if "run_id" not in adata.uns["decipher"]:
+
+    if "run_id_history" not in adata.uns["decipher"]:
+        adata.uns["decipher"]["run_id_history"] = []
+
+    if "run_id" not in adata.uns["decipher"] or not overwrite:
         adata.uns["decipher"]["run_id"] = get_random_name()
+        adata.uns["decipher"]["run_id_history"].append(adata.uns["decipher"]["run_id"])
         logging.info(f"Saving decipher _decipher with run_id {adata.uns['decipher']['run_id']}.")
     else:
-        logging.info("Overwriting existing decipher _decipher.")
+        logging.info("Overwriting existing decipher model.")
 
     model_run_id = adata.uns["decipher"]["run_id"]
     save_folder = DECIPHER_GLOBALS["save_folder"]
