@@ -59,10 +59,11 @@ def gene_patterns(
     smoothing_window=5,
     cell_type_key=None,
     palette=None,
-    label_palette=None,
     pattern_names=None,
     figsize=(3, 2.3),
+    ax=None,
     include_uncertainty=True,
+    max_length=None,
 ):
     if type(gene_name) == list:
         gene_id = [adata.var_names.tolist().index(gn) for gn in gene_name]
@@ -77,8 +78,11 @@ def gene_patterns(
     elif type(pattern_names) == str:
         pattern_names = [pattern_names]
 
-    fig = plt.figure(figsize=figsize)
-    ax = fig.gca()
+    if ax is None:
+        fig = plt.figure(figsize=figsize)
+        ax = fig.gca()
+    else:
+        fig = ax.figure
     start_times = []
     end_times = []
 
@@ -94,35 +98,39 @@ def gene_patterns(
         gene_pattern_q75 = moving_average(gene_pattern_q75, smoothing_window)
         times = gene_pattern["times"]
 
+        times = times[:max_length]
+        gene_pattern_mean = gene_pattern_mean[:max_length]
+        gene_pattern_q25 = gene_pattern_q25[:max_length]
+        gene_pattern_q75 = gene_pattern_q75[:max_length]
+
         if palette is not None and p_name in palette:
             color = palette[p_name]
         else:
             color = default_color_palette[i]
-        if label_palette is not None and p_name in label_palette:
-            label = label_palette[p_name]
-        else:
-            label = p_name
 
         start_times.append(times[0])
         end_times.append(times[-1])
 
         if include_uncertainty:
             ax.fill_between(times, gene_pattern_q25, gene_pattern_q75, color=color, alpha=0.3)
-        ax.plot(times, gene_pattern_mean, label=label, color=color, linewidth=3)
+        ax.plot(times, gene_pattern_mean, label=p_name, color=color, linewidth=3)
     if cell_type_key is not None:
-        _add_cell_type_band(adata, pattern_names[0], cell_type_key, ax, palette)
+        # TODO: need to decide which pattern_name to use for the cell type ... (all?)
+        _add_cell_type_band(adata, pattern_names[-1], cell_type_key, ax, palette)
 
     if crop_to_min_length:
-        plt.xlim(max(start_times), min(end_times))
+        ax.set_xlim(max(start_times), min(end_times))
     else:
-        plt.xlim(min(start_times), max(end_times))
+        ax.set_xlim(min(start_times), max(end_times))
 
-    plt.xticks([])
-    plt.xlabel("Decipher time", fontsize=14)
-    plt.ylabel("Gene expression", fontsize=14)
-    plt.ylim(0)
-    plt.legend(frameon=False)
-    plt.title(gene_name, fontsize=18)
+    ax.set_xticks([])
+    ax.set_xlabel("Decipher time", fontsize=14)
+    ax.set_ylabel("Gene expression", fontsize=14)
+    ax.set_ylim(0)
+    ax.legend(frameon=False)
+    ax.set_title(gene_name, fontsize=18)
+
+    return fig
 
 
 def decipher_time(adata, **kwargs):
