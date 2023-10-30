@@ -6,18 +6,22 @@ from pyro.infer import SVI, Trace_ELBO
 from pyro.optim import MultiStepLR
 from tqdm import tqdm
 
-from model import Decipher, DecipherConfig
-from model.data import load_decipher_model, make_data_loader_from_adata, save_decipher_model
+from decipher.tools._decipher import Decipher, DecipherConfig
+from decipher.tools._decipher.data import (
+    decipher_load_model,
+    make_data_loader_from_adata,
+    decipher_save_model,
+)
 
 
-from plot.model import decipher as plot_decipher_v
+from decipher.plot.decipher import decipher as plot_decipher_v
 import scanpy as sc
 
 from pyro import poutine
 
 
 def predictive_log_likelihood(decipher, dataloader):
-    """Compute the predictive log likelihood of the model."""
+    """Compute the predictive log likelihood of the _decipher."""
     if type(dataloader) == sc.AnnData:
         dataloader = make_data_loader_from_adata(dataloader, decipher.config.batch_size)
 
@@ -36,6 +40,7 @@ def decipher_train(
     adata: sc.AnnData,
     decipher_config=DecipherConfig(),
     plot_every_k_epoch=-1,
+    colors=None,
 ):
     pyro.clear_param_store()
     pyro.util.set_rng_seed(decipher_config.seed)
@@ -95,11 +100,11 @@ def decipher_train(
 
         if plot_every_k_epoch > 0 and (epoch % plot_every_k_epoch == 0):
             _decipher_to_adata(decipher, adata)
-            plot_decipher_v(adata, ["cell_type_merged", "log1p_total_counts"], basis="decipher_v")
+            plot_decipher_v(adata, colors, basis="decipher_v")
             plt.show()
 
     _decipher_to_adata(decipher, adata)
-    save_decipher_model(adata, decipher)
+    decipher_save_model(adata, decipher)
 
     return decipher, val_losses
 
@@ -143,7 +148,7 @@ def decipher_rotate_space(
         If True, flip each z to be correlated positively with the components.
         Default: True.
     """
-    decipher = load_decipher_model(adata)
+    decipher = decipher_load_model(adata)
     _decipher_to_adata(decipher, adata)
 
     def process_col_obs(v_col, v_order):
@@ -200,5 +205,5 @@ def _decipher_to_adata(decipher, adata):
 
 
 def decipher_load_model(adata):
-    decipher = load_decipher_model(adata)
+    decipher = decipher_load_model(adata)
     return decipher

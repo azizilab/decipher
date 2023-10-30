@@ -6,7 +6,7 @@ import torch
 from pyro.infer import Trace_ELBO, SVI
 from pyro.optim import MultiStepLR
 
-from model.decipher import make_data_loader_from_adata, Decipher
+from decipher.tools._decipher.decipher import make_data_loader_from_adata, Decipher
 
 
 def plot_decipher(adata, title=None, **kwargs):

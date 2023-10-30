@@ -10,8 +10,8 @@ from pyro.infer import SVI, Trace_ELBO, Predictive
 from sklearn.metrics import adjusted_rand_score
 from tqdm import tqdm
 
-from basis_decomposition.model import BasisDecomposition
-from basis_decomposition.inference import get_inference_guide, InferenceMode
+from decipher.tools._basis_decomposition.model import BasisDecomposition
+from decipher.tools._basis_decomposition.inference import get_inference_guide, InferenceMode
 
 from sklearn.cluster import KMeans, DBSCAN
 from sklearn.metrics import silhouette_score
@@ -132,12 +132,12 @@ def main():
                 print("it/s", (j + 1) / (time.time() - start_time))
                 exit()
             if reconstruction_rel < 0.025:
-                # print(evaluate(model, guide, clusters, times, gene_expression, max(clusters) + 1))
+                # print(evaluate(_decipher, guide, clusters, times, gene_expression, max(clusters) + 1))
                 exit()
         # if j % 500 == 0:
-        #    print(evaluate(model, guide, clusters, times, gene_expression, max(clusters) + 1))
+        #    print(evaluate(_decipher, guide, clusters, times, gene_expression, max(clusters) + 1))
 
-        # plots(model, guide, clusters, times, gene_expression, max(clusters) + 1)
+        # plots(_decipher, guide, clusters, times, gene_expression, max(clusters) + 1)
 
 
 def get_basis(model, guide, gene_patterns, times):

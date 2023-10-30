@@ -1,9 +1,9 @@
 import numpy as np
 import pandas as pd
 
-from basis_decomposition.inference import InferenceMode
+from decipher.tools._basis_decomposition.inference import InferenceMode
 
-from basis_decomposition.run import (
+from decipher.tools._basis_decomposition.run import (
     compute_basis_decomposition as run_compute_basis_decomposition,
     get_basis,
 )
@@ -44,7 +44,7 @@ def basis_decomposition(
     gene_scales = gene_scales.detach().numpy()
     betas = samples["beta"]["mean"].squeeze().detach().numpy()
     basis = get_basis(trajectory_model, guide, gene_patterns, times)
-    adata.uns["decipher"]["basis_decomposition"] = {
+    adata.uns["decipher"]["_basis_decomposition"] = {
         "scales": gene_scales,
         "betas": betas,
         "basis": basis,
@@ -71,8 +71,8 @@ def disruption_scores(adata):
     """
     disruptions = []
     for g_id in range(len(adata.var_names)):
-        beta_g = adata.uns["decipher"]["basis_decomposition"]["betas"][:, g_id, :]
-        gene_scales = adata.uns["decipher"]["basis_decomposition"]["scales"][:, g_id]
+        beta_g = adata.uns["decipher"]["_basis_decomposition"]["betas"][:, g_id, :]
+        gene_scales = adata.uns["decipher"]["_basis_decomposition"]["scales"][:, g_id]
         shape_disruption = np.linalg.norm(beta_g[0] - beta_g[1], ord=2)
         scale_disruption = abs(np.log(gene_scales[0]) - np.log(gene_scales[1]))
         combined_disruption = abs(

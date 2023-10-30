@@ -13,7 +13,7 @@ import torch.utils.data
 from torch.distributions import constraints
 from torch.nn.functional import softmax, softplus
 
-from model.module import ConditionalDenseNN
+from decipher.tools._decipher.module import ConditionalDenseNN
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(
@@ -56,12 +56,12 @@ class DecipherConfig:
 
 
 class Decipher(nn.Module):
-    """Decipher model for single-cell data.
+    """Decipher _decipher for single-cell data.
 
     Parameters
     ----------
     config : DecipherConfig or dict
-        Configuration for the decipher model.
+        Configuration for the decipher _decipher.
     """
 
     def __init__(

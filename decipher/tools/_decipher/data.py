@@ -7,8 +7,8 @@ import torch
 import torch.utils.data
 import torch.nn.functional
 
-from model import Decipher, DecipherConfig
-from utils import DECIPHER_GLOBALS, create_decipher_uns_key
+from decipher.tools._decipher import Decipher, DecipherConfig
+from decipher.utils import DECIPHER_GLOBALS, create_decipher_uns_key
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(
@@ -28,13 +28,13 @@ def get_random_name(seed=None):
     return f"{datetime_str}-{name}"
 
 
-def save_decipher_model(adata, model):
+def decipher_save_model(adata, model):
     create_decipher_uns_key(adata)
     if "run_id" not in adata.uns["decipher"]:
         adata.uns["decipher"]["run_id"] = get_random_name()
-        logging.info(f"Saving decipher model with run_id {adata.uns['decipher']['run_id']}.")
+        logging.info(f"Saving decipher _decipher with run_id {adata.uns['decipher']['run_id']}.")
     else:
-        logging.info("Overwriting existing decipher model.")
+        logging.info("Overwriting existing decipher _decipher.")
 
     model_run_id = adata.uns["decipher"]["run_id"]
     save_folder = DECIPHER_GLOBALS["save_folder"]
@@ -44,10 +44,10 @@ def save_decipher_model(adata, model):
     adata.uns["decipher"]["config"] = model.config.to_dict()
 
 
-def load_decipher_model(adata):
+def decipher_load_model(adata):
     create_decipher_uns_key(adata)
     if "run_id" not in adata.uns["decipher"]:
-        raise ValueError("No decipher model has been saved for this AnnData object.")
+        raise ValueError("No decipher _decipher has been saved for this AnnData object.")
 
     model_config = DecipherConfig(**adata.uns["decipher"]["config"])
     model = Decipher(model_config)

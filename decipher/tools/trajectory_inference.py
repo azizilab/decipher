@@ -8,8 +8,8 @@ import scanpy as sc
 import scipy.spatial
 import torch.nn.functional
 
-from model.data import load_decipher_model
-from utils import create_decipher_uns_key
+from decipher.tools._decipher.data import decipher_load_model
+from decipher.utils import create_decipher_uns_key
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(
@@ -387,7 +387,7 @@ def gene_patterns(adata, l_scale=10_000, n_samples=100):
         - times: the times of the trajectory
     """
     uns_decipher_key = "gene_patterns"
-    model = load_decipher_model(adata)
+    model = decipher_load_model(adata)
     if uns_decipher_key not in adata.uns["decipher"]:
         adata.uns["decipher"][uns_decipher_key] = dict()
 
