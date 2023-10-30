@@ -22,7 +22,7 @@ def basis(adata, colors=None, figsize=(5, 2.5), linewidth=3, ax=None):
     return fig
 
 
-from .trajectory import gene_patterns as plot_gene_patterns
+from .trajectory_inference import gene_patterns as plot_gene_patterns
 
 
 def gene_patterns_decomposition(

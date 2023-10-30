@@ -2,6 +2,7 @@ import logging
 
 import numpy as np
 from matplotlib import pyplot as plt
+import matplotlib.patheffects as pe
 import seaborn as sns
 from sklearn.neighbors import KNeighborsClassifier
 
@@ -12,6 +13,12 @@ logging.basicConfig(
     format="%(asctime)s | %(levelname)s : %(message)s",
     level=logging.INFO,  # stream=sys.stdout
 )
+
+
+def cell_clusters(adata, legend_loc="on data", legend_fontsize=10):
+    return plot_decipher_v(
+        adata, color="decipher_clusters", legend_loc=legend_loc, legend_fontsize=legend_fontsize
+    )
 
 
 def trajectories(
@@ -38,9 +45,10 @@ def trajectories(
             cluster_locations[:, 0],
             cluster_locations[:, 1],
             marker="o",
-            c="black",
+            c=color,
             markerfacecolor=color,
             markersize=7,
+            path_effects=[pe.Stroke(linewidth=3, foreground="black"), pe.Normal()],
         )
         ax.plot(
             cluster_locations[:1, 0],
@@ -115,8 +123,8 @@ def gene_patterns(
             ax.fill_between(times, gene_pattern_q25, gene_pattern_q75, color=color, alpha=0.3)
         ax.plot(times, gene_pattern_mean, label=p_name, color=color, linewidth=3)
     if cell_type_key is not None:
-        # TODO: need to decide which pattern_name to use for the cell type ... (all?)
-        _add_cell_type_band(adata, pattern_names[-1], cell_type_key, ax, palette)
+        for i, p_name in enumerate(pattern_names):
+            _add_cell_type_band(adata, p_name, cell_type_key, ax, palette, offset=i + 1)
 
     if crop_to_min_length:
         ax.set_xlim(max(start_times), min(end_times))
@@ -137,7 +145,9 @@ def decipher_time(adata, **kwargs):
     return plot_decipher_v(adata, "decipher_time", **kwargs)
 
 
-def _add_cell_type_band(adata, trajectory_name, cell_type_key, ax, palette, n_neighbors=50):
+def _add_cell_type_band(
+    adata, trajectory_name, cell_type_key, ax, palette, n_neighbors=50, offset=1
+):
     trajectory = adata.uns["decipher"]["trajectories"][trajectory_name]
     if (
         "cell_types" not in trajectory
@@ -163,7 +173,7 @@ def _add_cell_type_band(adata, trajectory_name, cell_type_key, ax, palette, n_ne
 
     plt.scatter(
         times,
-        np.zeros(len(times)) - 0.03,
+        np.zeros(len(times)) - 0.05 * offset + 0.025,
         c=[palette[c] for c in cell_types],
         marker="s",
         s=20,
@@ -171,4 +181,4 @@ def _add_cell_type_band(adata, trajectory_name, cell_type_key, ax, palette, n_ne
         clip_on=False,
         edgecolors=None,
     )
-    ax.xaxis.labelpad = 10
+    ax.xaxis.labelpad = 5 + 5 * offset
