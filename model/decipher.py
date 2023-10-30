@@ -39,7 +39,6 @@ class DecipherConfig:
 
     dim_genes: int = None
     n_cells: int = None
-    minibatch_rescaling: float = None
     prior: str = "normal"
 
     _initialized_from_adata: bool = False
@@ -47,7 +46,6 @@ class DecipherConfig:
     def initialize_from_adata(self, adata):
         self.dim_genes = adata.shape[1]
         self.n_cells = adata.shape[0]
-        self.minibatch_rescaling = adata.shape[0] / self.batch_size
         self._initialized_from_adata = True
 
     def to_dict(self):
@@ -62,8 +60,6 @@ class Decipher(nn.Module):
 
     Parameters
     ----------
-    genes_dim : int
-        Number of genes in the dataset.
     config : DecipherConfig or dict
         Configuration for the decipher model.
     """
@@ -84,7 +80,6 @@ class Decipher(nn.Module):
 
         self.config = config
 
-        self.minibatch_rescaling = config.minibatch_rescaling
         self.decoder_v_to_z = ConditionalDenseNN(
             self.config.dim_v, self.config.layers_v_to_z, [self.config.dim_z] * 2
         )
@@ -98,7 +93,7 @@ class Decipher(nn.Module):
             self.config.dim_genes + self.config.dim_z, [128], [self.config.dim_v, self.config.dim_v]
         )
 
-        self._epsilon = 5e-3
+        self._epsilon = 1e-5
 
         self.theta = None
         print("V5")
@@ -112,12 +107,7 @@ class Decipher(nn.Module):
             constraint=constraints.positive,
         )
 
-        with pyro.plate("batch", len(x)), poutine.scale(scale=self.minibatch_rescaling):
-            with poutine.scale(scale=self.beta):
-                if self.prior == "normal":
-                    v = pyro.sample("v", dist.Normal(0, x.new_ones(self.v_sim)).to_event(1))
-                elif self.prior == "gamma":
-                    v = pyro.sample("v", dist.Gamma(0.3, x.new_ones(self.v_sim) * 0.8).to_event(1))
+        with pyro.plate("batch", len(x)), poutine.scale(scale=1.0):
             with poutine.scale(scale=self.config.beta):
                 if self.config.prior == "normal":
                     prior = dist.Normal(0, x.new_ones(self.config.dim_v)).to_event(1)
@@ -146,7 +136,7 @@ class Decipher(nn.Module):
 
     def guide(self, x, context=None):
         pyro.module("decipher", self)
-        with pyro.plate("batch", len(x)), poutine.scale(scale=self.config.minibatch_rescaling):
+        with pyro.plate("batch", len(x)), poutine.scale(scale=1.0):
             x = torch.log1p(x)
 
             z_loc, z_scale = self.encoder_x_to_z(x, context=context)
