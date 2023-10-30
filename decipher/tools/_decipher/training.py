@@ -1,23 +1,29 @@
+import logging
+
 import numpy as np
 import pyro
+import scanpy as sc
 import torch
 from matplotlib import pyplot as plt
+from pyro import poutine
 from pyro.infer import SVI, Trace_ELBO
 from pyro.optim import MultiStepLR
 from tqdm import tqdm
 
+from decipher.plot.decipher import decipher as plot_decipher_v
 from decipher.tools._decipher import Decipher, DecipherConfig
 from decipher.tools._decipher.data import (
     decipher_load_model,
-    make_data_loader_from_adata,
     decipher_save_model,
+    make_data_loader_from_adata,
 )
+from decipher.tools.utils import EarlyStopping
 
-
-from decipher.plot.decipher import decipher as plot_decipher_v
-import scanpy as sc
-
-from pyro import poutine
+logger = logging.getLogger(__name__)
+logging.basicConfig(
+    format="%(asctime)s | %(levelname)s : %(message)s",
+    level=logging.INFO,  # stream=sys.stdout
+)
 
 
 def predictive_log_likelihood(decipher, dataloader):
@@ -40,7 +46,7 @@ def decipher_train(
     adata: sc.AnnData,
     decipher_config=DecipherConfig(),
     plot_every_k_epoch=-1,
-    colors=None,
+    plot_kwargs=None,
 ):
     pyro.clear_param_store()
     pyro.util.set_rng_seed(decipher_config.seed)
@@ -54,6 +60,9 @@ def decipher_train(
     val_idx = cell_idx[-n_val:]
     adata_train = adata[train_idx, :]
     adata_val = adata[val_idx, :]
+
+    if plot_kwargs is None:
+        plot_kwargs = dict()
 
     decipher_config.initialize_from_adata(adata_train)
 
@@ -74,6 +83,7 @@ def decipher_train(
     svi = SVI(decipher.model, decipher.guide, optimizer, elbo)
     # Training loop
     val_losses = []
+    early_stopping = EarlyStopping(patience=5)
     pbar = tqdm(range(decipher_config.n_epochs))
     for epoch in pbar:
         train_losses = []
@@ -97,14 +107,18 @@ def decipher_train(
         pbar.set_description(
             f"Epoch {epoch} | train elbo: {train_elbo:.2f} | val ll:" f" {val_nll:.2f}"
         )
+        if early_stopping(val_nll):
+            print("Early stopping.")
+            break
 
         if plot_every_k_epoch > 0 and (epoch % plot_every_k_epoch == 0):
             _decipher_to_adata(decipher, adata)
-            plot_decipher_v(adata, colors, basis="decipher_v")
+            plot_decipher_v(adata, basis="decipher_v", **plot_kwargs)
             plt.show()
 
     _decipher_to_adata(decipher, adata)
     decipher_save_model(adata, decipher)
+    plot_decipher_v(adata, basis="decipher_v", **plot_kwargs)
 
     return decipher, val_losses
 
@@ -202,8 +216,5 @@ def _decipher_to_adata(decipher, adata):
     latent_v, latent_z = decipher.compute_v_z(adata.X.toarray())
     adata.obsm["decipher_v"] = latent_v
     adata.obsm["decipher_z"] = latent_z
-
-
-def decipher_load_model(adata):
-    decipher = decipher_load_model(adata)
-    return decipher
+    logging.info("Added `.obsm['decipher_v']`: the Decipher v space.")
+    logging.info("Added `.obsm['decipher_z']`: the Decipher z space.")

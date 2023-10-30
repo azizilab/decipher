@@ -15,12 +15,6 @@ from torch.nn.functional import softmax, softplus
 
 from decipher.tools._decipher.module import ConditionalDenseNN
 
-logger = logging.getLogger(__name__)
-logging.basicConfig(
-    format="%(asctime)s | %(levelname)s : %(message)s",
-    level=logging.INFO,  # stream=sys.stdout
-)
-
 
 @dataclass(unsafe_hash=True)
 class DecipherConfig:

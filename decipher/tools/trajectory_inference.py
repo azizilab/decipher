@@ -103,19 +103,23 @@ class Trajectory:
 class TConfig:
     def __init__(
         self,
-        start_cluster,
-        end_cluster,
+        name: str,
+        start_cluster_or_marker=None,
+        end_cluster_or_marker=None,
         subset_col=None,
         subset_val=None,
+        cluster_ids_list=None,
         subset_percent_per_cluster=0.3,
         min_cell_per_cluster=10,
     ):
-        self._start_cluster = start_cluster
-        self._end_cluster = end_cluster
+        self.name = name
+        self._start_cluster = start_cluster_or_marker
+        self._end_cluster = end_cluster_or_marker
         self.subset_column = subset_col
         self.subset_value = subset_val
         self.subset_percent_per_cluster = subset_percent_per_cluster
         self.min_cell_per_cluster = min_cell_per_cluster
+        self.cluster_ids_list = cluster_ids_list
 
     def _compute_cluster_id(self, adata, cluster_input, cluster_key="decipher_clusters"):
         # several things:
@@ -136,7 +140,7 @@ class TConfig:
             cluster_input,
             subset_column=self.subset_column,
             subset_value=self.subset_value,
-            subset_percent_per_cluster=self.subset_percent_per_cluster,
+            subset_min_percent_per_cluster=self.subset_percent_per_cluster,
             cluster_key=cluster_key,
             min_cell_per_cluster=self.min_cell_per_cluster,
         )
@@ -176,12 +180,14 @@ def cell_clusters(adata, leiden_resolution=1.0, n_neighbors=10, seed=0, rep_key=
     )
     adata.obs["decipher_clusters"] = pd.Categorical(adata.obs[cluster_key])
 
+    logging.info("Added `.obs['decipher_clusters']`: the cluster labels.")
+
 
 def _subset_cells_and_clusters(
     adata,
     subset_column,
     subset_value,
-    subset_percent_per_cluster=0.3,
+    subset_min_percent_per_cluster=0.3,
     min_cell_per_cluster=10,
     cluster_key="decipher_clusters",
 ):
@@ -191,7 +197,7 @@ def _subset_cells_and_clusters(
     data["in_subset"] = data["subset"] == subset_value
     # clusters that contains too few cells in the subset are discarded
     # 1) the proportion of cells from the subset in the cluster is too low
-    valid_p = data.groupby("cluster").mean()["in_subset"] > subset_percent_per_cluster
+    valid_p = data.groupby("cluster").mean()["in_subset"] > subset_min_percent_per_cluster
     # 2) the number of cells from the subset in the cluster is too low
     valid_n = data.groupby("cluster")["in_subset"].sum() > min_cell_per_cluster
     valid_clusters = valid_p & valid_n
@@ -209,7 +215,7 @@ def find_cluster_with_marker(
     marker,
     subset_column=None,
     subset_value=None,
-    subset_percent_per_cluster=0.3,
+    subset_min_percent_per_cluster=0.3,
     cluster_key="decipher_clusters",
     min_cell_per_cluster=10,
 ):
@@ -236,7 +242,7 @@ def find_cluster_with_marker(
             adata,
             subset_column,
             subset_value,
-            subset_percent_per_cluster=subset_percent_per_cluster,
+            subset_min_percent_per_cluster=subset_min_percent_per_cluster,
             min_cell_per_cluster=min_cell_per_cluster,
             cluster_key=cluster_key,
         )
@@ -250,7 +256,7 @@ def find_cluster_with_marker(
 
 def trajectories(
     adata,
-    trajectories_config,
+    *trajectory_configs,
     resolution=50,
     cluster_key="decipher_clusters",
 ):
@@ -284,7 +290,8 @@ def trajectories(
     uns_key = "trajectories"
     create_decipher_uns_key(adata)
 
-    for t_name, t_config in trajectories_config.items():
+    for t_config in trajectory_configs:
+        t_name = t_config.name
         if t_config.subset_column is not None:
             adata_subset = _subset_cells_and_clusters(
                 adata,
@@ -306,22 +313,26 @@ def trajectories(
         cluster_locations = cells_locations.groupby("cluster_id").mean()
         cluster_locations = cluster_locations[valid_clusters]
 
-        graph = nx.Graph()
-        for i, (x, y) in cluster_locations[[0, 1]].iterrows():
-            graph.add_node(i, x=x, y=y, xy=np.array([x, y]))
+        if t_config.cluster_ids_list is not None:
+            t_cluster_ids = t_config.cluster_ids_list
+        else:
+            graph = nx.Graph()
+            for i, (x, y) in cluster_locations[[0, 1]].iterrows():
+                graph.add_node(i, x=x, y=y, xy=np.array([x, y]))
 
-        distance_func = scipy.spatial.distance.euclidean
-        for n1, n2 in itertools.combinations(graph.nodes, r=2):
-            n1_data, n2_data = graph.nodes[n1], graph.nodes[n2]
-            distance = distance_func(n1_data["xy"], n2_data["xy"])
-            graph.add_edge(n1, n2, weight=distance)
-        tree = nx.minimum_spanning_tree(graph)
+            distance_func = scipy.spatial.distance.euclidean
+            for n1, n2 in itertools.combinations(graph.nodes, r=2):
+                n1_data, n2_data = graph.nodes[n1], graph.nodes[n2]
+                distance = distance_func(n1_data["xy"], n2_data["xy"])
+                graph.add_edge(n1, n2, weight=distance)
+            tree = nx.minimum_spanning_tree(graph)
 
-        start_cluster_id = t_config.get_start_cluster_id(adata)
-        end_cluster_id = t_config.get_end_cluster_id(adata)
+            start_cluster_id = t_config.get_start_cluster_id(adata)
+            end_cluster_id = t_config.get_end_cluster_id(adata)
 
-        t_cluster_ids = nx.shortest_path(tree, start_cluster_id, end_cluster_id)
-        print(t_name, ":", t_cluster_ids)
+            t_cluster_ids = nx.shortest_path(tree, start_cluster_id, end_cluster_id)
+
+        logging.info(f"Trajectory {t_name} : {t_cluster_ids})")
         t_cluster_locations = np.array(
             [cluster_locations.loc[cluster_id, [0, 1]] for cluster_id in t_cluster_ids]
         ).astype(np.float32)
@@ -329,6 +340,7 @@ def trajectories(
             t_cluster_locations, t_cluster_ids, point_density=resolution, rep_key=rep_key
         )
         adata.uns["decipher"][uns_key][t_name] = trajectory.to_dict()
+        logging.info(f"Added trajectory {t_name} to `adata.uns['decipher']['{uns_key}']`.")
 
 
 def decipher_time(adata, n_neighbors=10):
@@ -358,6 +370,8 @@ def decipher_time(adata, n_neighbors=10):
         adata.obs.loc[cells_on_trajectory_index, "decipher_time"] = knn.predict(
             adata.obsm["decipher_v"][cells_on_trajectory_idx]
         )
+
+    logging.info("Added `.obs['decipher_time']`: the decipher time of each cell.")
 
 
 def gene_patterns(adata, l_scale=10_000, n_samples=100):
