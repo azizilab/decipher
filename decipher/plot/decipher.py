@@ -44,6 +44,7 @@ def decipher(
     y_label="Decipher 2",
     axis_type="arrow",
     figsize=(3.5, 3.5),
+    vmax=lambda xs: np.quantile(xs, 0.99),
     **kwargs,
 ):
     with plt.rc_context({"figure.figsize": figsize}):
@@ -55,6 +56,7 @@ def decipher(
             return_fig=True,
             frameon=(axis_type in ["line", "arrow"]),
             ncols=ncols,
+            vmax=vmax if color is not None else None,
             **kwargs,
         )
     ax = fig.axes[0]
