@@ -409,7 +409,6 @@ def gene_patterns(adata, l_scale=10_000, n_samples=100):
         t_points = adata.uns["decipher"]["trajectories"][t_name]["points"]
         t_times = adata.uns["decipher"]["trajectories"][t_name]["times"]
 
-        # TODO: deprecated
         if "rotation" in adata.uns["decipher"]:
             # need to undo rotation of the decipher_v space
             t_points = t_points @ np.linalg.inv(adata.uns["decipher"]["rotation"])
