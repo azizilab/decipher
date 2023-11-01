@@ -1,3 +1,4 @@
+import numpy as np
 from matplotlib import pyplot as plt
 import seaborn as sns
 
@@ -67,3 +68,35 @@ def gene_patterns_decomposition(
         ax.set_xticks([])
 
     return fig
+
+
+def disruption_scores(
+    adata,
+    gene_names,
+    color_palette=None,
+    sort_by="shape",
+    figsize=(3, 4),
+):
+    if sort_by in ["shape", "combined", "scale"]:
+        gene_names = sorted(
+            gene_names,
+            key=lambda gn: np.mean(adata.uns["decipher"]["disruption_scores"].loc[gn, sort_by]),
+        )
+    fig, axs = plt.subplots(2, 1, figsize=figsize, sharex="col")
+    for (ax, col) in zip(axs, ["shape", "combined"]):
+        sns.boxplot(
+            data=adata.uns["decipher"]["disruption_scores_samples"],
+            x="gene",
+            y=col,
+            order=gene_names,
+            palette=color_palette,
+            whis=(0, 100),
+            boxprops={"lw": 0},
+            medianprops={"lw": 0},
+            ax=ax,
+        )
+    axs[0].set_ylabel("Shape disruption", fontsize=13)
+    axs[0].set_xlabel(None)
+    axs[1].set_ylabel("Combined disruption", fontsize=13)
+    axs[1].set_xticklabels(gene_names, rotation=45, ha="right", rotation_mode="anchor", fontsize=10)
+    axs[1].set_xlabel(None)

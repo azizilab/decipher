@@ -72,6 +72,7 @@ def gene_patterns(
     ax=None,
     include_uncertainty=True,
     max_length=None,
+    cell_type_band_pattern_names=None,
 ):
     if type(gene_name) == list:
         gene_id = [adata.var_names.tolist().index(gn) for gn in gene_name]
@@ -123,7 +124,9 @@ def gene_patterns(
             ax.fill_between(times, gene_pattern_q25, gene_pattern_q75, color=color, alpha=0.3)
         ax.plot(times, gene_pattern_mean, label=p_name, color=color, linewidth=3)
     if cell_type_key is not None:
-        for i, p_name in enumerate(pattern_names):
+        if cell_type_band_pattern_names is None:
+            cell_type_band_pattern_names = pattern_names
+        for i, p_name in enumerate(cell_type_band_pattern_names):
             _add_cell_type_band(adata, p_name, cell_type_key, ax, palette, offset=i + 1)
 
     if crop_to_min_length:
