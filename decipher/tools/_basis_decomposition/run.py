@@ -18,6 +18,8 @@ from sklearn.metrics import silhouette_score
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+from decipher.tools.utils import EarlyStopping
+
 
 def compute_basis_decomposition(
     gene_patterns,
@@ -26,7 +28,7 @@ def compute_basis_decomposition(
     lr=1e-3,
     n_iter=10_000,
     beta_prior=1.0,
-    seed=0,
+    seed=1,
     normalized_mode=True,
     times=None,
 ):
@@ -48,16 +50,16 @@ def compute_basis_decomposition(
     if times is None:
         times = torch.FloatTensor(np.linspace(-10, 10, gene_patterns.shape[-1]))
     else:
-        # TODO: must find a way to ensure that the times are in [-5, 5]-ish
+        # TODO: ensure that the times are in [-5, 5]-ish, transparently to the user
         times = torch.FloatTensor(times)
 
     gene_patterns_mean = gene_patterns.mean(axis=(0, 2), keepdim=True)
     gene_patterns_raw = gene_patterns
     gene_patterns = gene_patterns_raw / gene_patterns_mean
 
-    pbar = tqdm(range(num_iterations))
-
     losses = []
+    early_stopping = EarlyStopping(patience=100)
+    pbar = tqdm(range(num_iterations))
     for _ in pbar:
         # calculate the loss and take a gradient step
         loss = svi.step(times, gene_patterns)
@@ -67,6 +69,18 @@ def compute_basis_decomposition(
             "Loss: %.1f - Relative Error: %.2f%%" % (loss, reconstruction_rel * 100)
         )
         losses.append(loss)
+        if early_stopping(loss):
+            break
+
+        if _ % 100 == 0:
+            from IPython.core import display
+
+            basis = model._last_basis.detach().numpy()
+            plt.figure(figsize=(5, 2.5))
+            plot_basis(basis)
+            display.clear_output(wait=True)
+            display.display(plt.gcf())
+            plt.close()
 
     model.return_basis = False
     predictive = Predictive(
@@ -132,12 +146,12 @@ def main():
                 print("it/s", (j + 1) / (time.time() - start_time))
                 exit()
             if reconstruction_rel < 0.025:
-                # print(evaluate(_decipher, guide, clusters, times, gene_expression, max(clusters) + 1))
+                # print(evaluate(model, guide, clusters, times, gene_expression, max(clusters) + 1))
                 exit()
         # if j % 500 == 0:
-        #    print(evaluate(_decipher, guide, clusters, times, gene_expression, max(clusters) + 1))
+        #    print(evaluate(model, guide, clusters, times, gene_expression, max(clusters) + 1))
 
-        # plots(_decipher, guide, clusters, times, gene_expression, max(clusters) + 1)
+        # plots(model, guide, clusters, times, gene_expression, max(clusters) + 1)
 
 
 def get_basis(model, guide, gene_patterns, times):
