@@ -42,6 +42,21 @@ def predictive_log_likelihood(decipher, dataloader):
     return log_likelihood / len(dataloader.dataset)
 
 
+def _make_train_val_split(adata, val_frac, seed):
+    n_val = int(val_frac * adata.shape[0])
+    cell_idx = np.arange(adata.shape[0])
+    np.random.default_rng(seed).shuffle(cell_idx)
+    # train_idx = cell_idx[:-n_val]
+    val_idx = cell_idx[-n_val:]
+    adata.obs["decipher_split"] = "train"
+    adata.obs.loc[adata.obs.index[val_idx], "decipher_split"] = "validation"
+    adata.obs["decipher_split"] = adata.obs["decipher_split"].astype("category")
+    logging.info(
+        "Added `.obs['decipher_split']`: the Decipher train/validation split.\n"
+        f" {n_val} cells in validation set."
+    )
+
+
 def decipher_train(
     adata: sc.AnnData,
     decipher_config=DecipherConfig(),
@@ -52,12 +67,9 @@ def decipher_train(
     pyro.util.set_rng_seed(decipher_config.seed)
 
     # split data into train and validation
-    val_frac = decipher_config.val_frac
-    n_val = int(val_frac * adata.shape[0])
-    cell_idx = np.arange(adata.shape[0])
-    np.random.default_rng(3).shuffle(cell_idx)
-    train_idx = cell_idx[:-n_val]
-    val_idx = cell_idx[-n_val:]
+    _make_train_val_split(adata, decipher_config.val_frac, decipher_config.seed)
+    train_idx = adata.obs["decipher_split"] == "train"
+    val_idx = adata.obs["decipher_split"] == "validation"
     adata_train = adata[train_idx, :]
     adata_val = adata[val_idx, :]
 
@@ -211,9 +223,23 @@ def decipher_rotate_space(
         adata.obsm["decipher_z"] = adata.obsm["decipher_z"] * z_sign_correction
 
 
+def decipher_gene_imputation(adata):
+    """Impute gene expression from the decipher model.
+
+    Parameters
+    ----------
+    adata: sc.AnnData
+        Annotated data matrix.
+    """
+    decipher = decipher_load_model(adata)
+    imputed = decipher.impute_gene_expression_numpy(adata.X.toarray())
+    adata.layers["decipher_imputed"] = imputed
+    logging.info("Added `.layers['imputed']`: the Decipher imputed data.")
+
+
 def _decipher_to_adata(decipher, adata):
     decipher.eval()
-    latent_v, latent_z = decipher.compute_v_z(adata.X.toarray())
+    latent_v, latent_z = decipher.compute_v_z_numpy(adata.X.toarray())
     adata.obsm["decipher_v"] = latent_v
     adata.obsm["decipher_z"] = latent_z
     logging.info("Added `.obsm['decipher_v']`: the Decipher v space.")
