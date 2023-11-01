@@ -31,7 +31,7 @@ def trajectories(
 
     Parameters
     ----------
-    adata : AnnData
+    adata : sc.AnnData
         The annotated data matrix.
     color : str, optional
         Key (or list of keys) for color annotations of cells, passed to `dc.pl.decipher` which
@@ -105,7 +105,7 @@ def gene_patterns(
 
     Parameters
     ----------
-    adata : AnnData
+    adata : sc.AnnData
         The annotated data matrix.
     gene_name : str or list of str
         The name(s) of the gene(s) to plot.
@@ -209,7 +209,7 @@ def decipher_time(adata, **kwargs):
 
     Parameters
     ----------
-    adata : AnnData
+    adata : sc.AnnData
         The annotated data matrix.
     **kwargs : dict
         Keyword arguments passed to `dc.pl.decipher` and ultimately to `sc.pl.embedding`.

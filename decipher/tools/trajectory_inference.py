@@ -194,7 +194,7 @@ def cell_clusters(adata, leiden_resolution=1.0, n_neighbors=10, seed=0, rep_key=
 
     Parameters
     ----------
-    adata : AnnData
+    adata : sc.AnnData
         The annotated data matrix.
     leiden_resolution : float, default 1.0
         The resolution of the Leiden algorithm.
@@ -283,7 +283,7 @@ def find_cluster_with_marker(
 
     Parameters
     ----------
-    adata : AnnData
+    adata : sc.AnnData
         The annotated data matrix.
     marker : str
         The marker gene.
@@ -327,7 +327,7 @@ def trajectories(
 
     Parameters
     ----------
-    adata : AnnData
+    adata : sc.AnnData
         The annotated data matrix.
     trajectory_configs : TConfig
         The trajectory configurations.
@@ -413,7 +413,7 @@ def decipher_time(adata, n_neighbors=10):
 
     Parameters
     ----------
-    adata : AnnData
+    adata : sc.AnnData
         The annotated data matrix. The trajectories should have been computed and stored in
         `adata.uns["decipher"]["trajectories"]`.
     n_neighbors : int
@@ -450,7 +450,7 @@ def gene_patterns(adata, l_scale=10_000, n_samples=100):
 
     Parameters
     ----------
-    adata : AnnData
+    adata : sc.AnnData
         The annotated data matrix. The trajectories should have been computed and stored in
         `adata.uns["decipher"]["trajectories"]`.
     l_scale : float

@@ -4,6 +4,26 @@ import seaborn as sns
 
 
 def basis(adata, colors=None, figsize=(5, 2.5), linewidth=3, ax=None):
+    """Plot the basis functions learned by the basis decomposition.
+
+    Parameters
+    ----------
+    adata : sc.AnnData
+        The annotated data matrix.
+    colors : list of str, optional
+        The colors to use for each basis.
+    figsize : tuple of float, default (5, 2.5)
+        The size of the figure.
+    linewidth : float or list of float, default 3
+        The width of the lines to plot.
+    ax : matplotlib.pyplot.Axes, optional
+        The axes on which to plot. If None, create a new figure and axes.
+
+    Returns
+    -------
+    fig : matplotlib.pyplot.Figure
+        The matplotlib figure.
+    """
     bases = adata.uns["decipher"]["basis_decomposition"]["basis"]
     if ax is None:
         fig = plt.figure(figsize=figsize)

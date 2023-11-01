@@ -30,7 +30,7 @@ def basis_decomposition(
 
     Parameters
     ----------
-    adata : AnnData
+    adata : sc.AnnData
         The annotated data matrix.
     pattern_names : list of str, optional
         The names of the gene patterns to use. If None, use all gene patterns available in
@@ -117,7 +117,7 @@ def disruption_scores(adata, pattern_name_a=0, pattern_name_b=1):
 
     Parameters
     ----------
-    adata : AnnData
+    adata : sc.AnnData
         The annotated data matrix.
     pattern_name_a : str or int, default 0
         The name or index of the first pattern.
