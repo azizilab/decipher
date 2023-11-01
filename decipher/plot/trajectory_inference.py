@@ -27,6 +27,31 @@ def trajectories(
     trajectory_names=None,
     palette=None,
 ):
+    """Plot the trajectories over the Decipher v space.
+
+    Parameters
+    ----------
+    adata : AnnData
+        The annotated data matrix.
+    color : str, optional
+        Key (or list of keys) for color annotations of cells, passed to `dc.pl.decipher` which
+        in turn passes it to `sc.pl.embedding`. The keys should be in `adata.obs` or should be
+        gene names.
+    trajectory_names : str or list of str, optional
+        The names of the trajectories to plot. If None, plot all trajectories.
+    palette : dict, optional
+        A dictionary mapping trajectory names to colors and/or mapping color keys to colors.
+
+    Returns
+    -------
+    fig : matplotlib.pyplot.Figure
+        The matplotlib figure.
+
+    See Also
+    --------
+    dc.pl.decipher
+    sc.pl.embedding
+    """
     fig = plot_decipher_v(adata, color=color, palette=palette)
     ax = fig.axes[0]
     if trajectory_names is None:
@@ -59,6 +84,8 @@ def trajectories(
             markerfacecolor=color,
         )
 
+    return fig
+
 
 def gene_patterns(
     adata,
@@ -74,6 +101,39 @@ def gene_patterns(
     max_length=None,
     cell_type_band_pattern_names=None,
 ):
+    """Plot the gene patterns over the Decipher time.
+
+    Parameters
+    ----------
+    adata : AnnData
+        The annotated data matrix.
+    gene_name : str or list of str
+        The name(s) of the gene(s) to plot.
+    crop_to_min_length : bool, default False
+        Crop the plot to the minimum length of the gene patterns.
+    smoothing_window : int, default 5
+        The size of the window for the moving average smoothing.
+    cell_type_key : str, optional
+        The key of the cell type annotations in `adata.obs`. If provided, the cell types will be
+        plotted as colored bands on the x-axis. See `cell_type_band_pattern_names` for more details.
+    palette : dict, optional
+        A dictionary mapping pattern names and cell type names to colors.
+    pattern_names : str or list of str, optional
+        The names of the gene patterns to plot. If None, plot all gene patterns.
+    figsize : tuple of float, default (3, 2.3)
+        The size of the figure.
+    ax : matplotlib.pyplot.Axes, optional
+        The axes on which to plot. If None, create a new figure and axes.
+    include_uncertainty : bool, default True
+        Whether to include the uncertainty of the gene patterns in the plot, as a shaded area.
+    max_length : int, optional
+        The maximum length of the gene patterns to plot. If None, plot the full length, up to the
+        minimum length of the gene patterns if `crop_to_min_length` is True.
+    cell_type_band_pattern_names : str or list of str, optional
+        The names of the gene patterns to use for the cell type bands. If None, use the same gene
+        patterns as `pattern_names`. It is useful to use a subset of the gene patterns to avoid
+        multiple bands.
+    """
     if type(gene_name) == list:
         gene_id = [adata.var_names.tolist().index(gn) for gn in gene_name]
     else:
@@ -145,6 +205,20 @@ def gene_patterns(
 
 
 def decipher_time(adata, **kwargs):
+    """Plot the Decipher time over the Decipher v space.
+
+    Parameters
+    ----------
+    adata : AnnData
+        The annotated data matrix.
+    **kwargs : dict
+        Keyword arguments passed to `dc.pl.decipher` and ultimately to `sc.pl.embedding`.
+
+    Returns
+    -------
+    fig : matplotlib.pyplot.Figure
+        The matplotlib figure.
+    """
     return plot_decipher_v(adata, "decipher_time", **kwargs)
 
 

@@ -26,6 +26,44 @@ def basis_decomposition(
     beta_prior=1,
     seed=0,
 ):
+    """Compute the basis decomposition of gene patterns.
+
+    Parameters
+    ----------
+    adata : AnnData
+        The annotated data matrix.
+    pattern_names : list of str, optional
+        The names of the gene patterns to use. If None, use all gene patterns available in
+        `adata.uns['decipher']['gene_patterns']`.
+    n_basis : int, default 5
+        The number of basis to use.
+    n_iter : int, default 10_000
+        The number of iterations to run.
+    lr : float, default 5e-3
+        The learning rate.
+    beta_prior : float, default 1
+        The prior on the beta parameter. The lower the value, the more sparse the betas.
+    seed : int, default 0
+        The random seed to use.
+
+    Returns
+    -------
+    losses : list of float
+        The losses at each iteration.
+    `adata.uns['decipher']['basis_decomposition']` : dict
+        The basis decomposition results.
+        - `scales` : np.ndarray (n_patterns, n_genes) - the scales of each gene in each pattern
+        - `betas` : np.ndarray (n_patterns, n_genes, n_basis) - the betas of each pattern
+        - `times` : np.ndarray (n_times,) - the time points
+        - `basis` : np.ndarray (n_times, n_basis) - the basis values at each time point
+        - `length` : int - the length of the gene patterns
+        - `gene_patterns_reconstruction` : dict - the reconstruction of each gene pattern
+        - `pattern_names` : list of str - the names of the gene patterns ordered as in each array
+        - `betas_samples` : np.ndarray (n_samples, n_patterns, n_genes, n_basis) - the betas
+            of each pattern sampled from the posterior
+    `adata.varm['decipher_betas_{pattern_name}']` : np.ndarray
+        The betas of the pattern `pattern_name` for each gene.
+    """
     if pattern_names is None:
         pattern_names = list(adata.uns["decipher"]["gene_patterns"].keys())
     gene_patterns = [
@@ -72,11 +110,32 @@ def basis_decomposition(
 
 
 def disruption_scores(adata, pattern_name_a=0, pattern_name_b=1):
-    """Compute all possible disruption scores:
-    - shape: ||beta[0] - beta[1]||_2
-    - scale: | log(s[0]) - log(s[1]) |
-    - combined: || log(beta[0]*s[0]) - log(beta[1]*s[1]) ||
+    """Compute the disruption scores:
+        - shape: ||beta[0] - beta[1]||_2
+        - scale: | log(s[0]) - log(s[1]) |
+        - combined: || log(beta[0]*s[0]) - log(beta[1]*s[1]) ||
 
+    Parameters
+    ----------
+    adata : AnnData
+        The annotated data matrix.
+    pattern_name_a : str or int, default 0
+        The name or index of the first pattern.
+    pattern_name_b : str or int, default 1
+        The name or index of the second pattern.
+
+    Returns
+    -------
+    `adata.var['decipher_disruption_shape']` : pd.Series
+        The shape disruption scores for each gene.
+    `adata.var['decipher_disruption_scale']` : pd.Series
+        The scale disruption scores for each gene.
+    `adata.var['decipher_disruption_combined']` : pd.Series
+        The combined disruption scores for each gene.
+    `adata.uns['decipher']['disruption_scores']` : pd.DataFrame
+        The disruption scores for each gene.
+    `adata.uns['decipher']['disruption_scores_samples']` : pd.DataFrame
+        The disruption scores for each gene sampled from the posterior.
     """
     if type(pattern_name_a) == str:
         pattern_name_a = adata.uns["decipher"]["basis_decomposition"]["pattern_names"].index(
@@ -88,7 +147,6 @@ def disruption_scores(adata, pattern_name_a=0, pattern_name_b=1):
         )
     idx_a = pattern_name_a
     idx_b = pattern_name_b
-    disruptions_mean = []
 
     def pairwise_distances(x, y):
         """

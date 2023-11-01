@@ -1,5 +1,6 @@
 def activate_journal_quality():
     """Activate journal quality settings for plotting.
+
     It is recommended for high quality figures while keeping the file size small.
     It is recommended if the figures are to be edited in Adobe Illustrator.
     """

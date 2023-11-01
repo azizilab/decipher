@@ -27,7 +27,7 @@ logging.basicConfig(
 
 
 def predictive_log_likelihood(decipher, dataloader):
-    """Compute the predictive log likelihood of the _decipher."""
+    """Compute the predictive log likelihood of the decipher model."""
     if type(dataloader) == sc.AnnData:
         dataloader = make_data_loader_from_adata(dataloader, decipher.config.batch_size)
 
@@ -63,6 +63,33 @@ def decipher_train(
     plot_every_k_epoch=-1,
     plot_kwargs=None,
 ):
+    """Train a decipher model.
+
+    Parameters
+    ----------
+    adata: sc.AnnData
+        The annotated data matrix.
+    decipher_config: DecipherConfig, optional
+        Configuration for the decipher model.
+    plot_every_k_epoch: int, optional
+        If > 0, plot the decipher space every `plot_every_k_epoch` epochs.
+        Default: -1 (no plots).
+    plot_kwargs: dict, optional
+        Additional keyword arguments to pass to `dc.pl.decipher`.
+
+    Returns
+    -------
+    decipher: Decipher
+        The trained decipher model.
+    val_losses: list of float
+        The validation losses at each epoch.
+    `adata.obs['decipher_split']`: categorical
+        The train/validation split.
+    `adata.obsm['decipher_v']`: ndarray
+        The decipher v space.
+    `adata.obsm['decipher_z']`: ndarray
+        The decipher z space.
+    """
     pyro.clear_param_store()
     pyro.util.set_rng_seed(decipher_config.seed)
 
@@ -155,24 +182,36 @@ def decipher_rotate_space(
     Parameters
     ----------
     adata: sc.AnnData
-        Annotated data matrix.
-    v1_col: str (optional)
+       The annotated data matrix.
+    v1_col: str, optional
         Column name in `adata.obs` to align the first decipher component with.
         If None, only align the second component (or does not align at all if `v2` is also None).
-    v1_order: list (optional)
+    v1_order: list, optional
         Ordered list of categorical values in `adata.obs[v1]` to use for the alignment. The
         alignment will attempt to align the ordered values in `v1_values` along `v1`.
         Must be provided if `adata.obs[v1]` is not numeric.
-    v2_col: str (optional)
+    v2_col: str, optional
         Column name in `adata.obs` to align the second decipher component with.
         If None, only align the first component (or does not align at all if `v1` is also None).
-    v2_order: list (optional)
+    v2_order: list, optional
         Ordered list of categorical values in `adata.obs[v2]` to use for the alignment. The
         alignment will attempt to align the ordered values in `v2_values` along `v2`.
         Must be provided if `adata.obs[v2]` is not numeric.
-    auto_flip_decipher_z: bool (optional)
+    auto_flip_decipher_z: bool, default True
         If True, flip each z to be correlated positively with the components.
-        Default: True.
+
+    Returns
+    -------
+    `adata.obsm['decipher_v']`: ndarray
+        The decipher v space after rotation.
+    `adata.obsm['decipher_v_not_rotated']`: ndarray
+        The decipher v space before rotation.
+    `adata.obsm['decipher_z']`: ndarray
+        The decipher z space after flipping.
+    `adata.obsm['decipher_z_not_rotated']`: ndarray
+        The decipher z space before flipping.
+    `adata.uns['decipher']['rotation']`: ndarray
+        The rotation matrix used to rotate the decipher v space.
     """
     decipher = decipher_load_model(adata)
     _decipher_to_adata(decipher, adata)
@@ -229,7 +268,12 @@ def decipher_gene_imputation(adata):
     Parameters
     ----------
     adata: sc.AnnData
-        Annotated data matrix.
+        The annotated data matrix.
+
+    Returns
+    -------
+    `adata.layers['decipher_imputed']`: ndarray
+        The imputed gene expression.
     """
     decipher = decipher_load_model(adata)
     imputed = decipher.impute_gene_expression_numpy(adata.X.toarray())
@@ -238,6 +282,22 @@ def decipher_gene_imputation(adata):
 
 
 def _decipher_to_adata(decipher, adata):
+    """Compute the decipher v and z spaces from the decipher model. Add them to `adata.obsm`.
+
+    Parameters
+    ----------
+    decipher: Decipher
+        The decipher model.
+    adata: sc.AnnData
+        The annotated data matrix.
+
+    Returns
+    -------
+    `adata.obsm['decipher_v']`: ndarray
+        The decipher v space.
+    `adata.obsm['decipher_z']`: ndarray
+        The decipher z space.
+    """
     decipher.eval()
     latent_v, latent_z = decipher.compute_v_z_numpy(adata.X.toarray())
     adata.obsm["decipher_v"] = latent_v

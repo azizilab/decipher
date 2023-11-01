@@ -84,7 +84,6 @@ class Trajectory:
             cluster_ids=self.cluster_ids,
             points=self.trajectory_latent,
             times=self.trajectory_time,
-            cumulative_length=self.cumulative_length,
             density=self._point_density,
             rep_key=self.rep_key,
         )
@@ -101,6 +100,43 @@ class Trajectory:
 
 
 class TConfig:
+    """A class to configure the computation of a trajectory.
+
+    The user can define a trajectory in different ways:
+    - by providing the start and end clusters of the trajectory: `start_cluster_or_marker` and
+      `end_cluster_or_marker`. These can be either cluster ids or marker genes. If they are marker
+      genes, the cluster with the highest expression of the marker gene is selected. Then, the
+      trajectory is computed as the shortest path between the two clusters in the minimum spanning
+      tree of the clusters.
+    - by providing a list of cluster ids: `cluster_ids_list`. Then, the trajectory is the path
+      connecting the clusters in the order of the list.
+
+    Parameters
+    ----------
+    name : str
+        The name of the trajectory. It is used as a key to store the trajectory in the AnnData.
+    start_cluster_or_marker : str, optional
+        The start cluster id or marker gene. If it is a marker gene, the cluster with the highest
+        expression of the marker gene is selected. If it is a cluster id, it is used as is.
+    end_cluster_or_marker : str, optional
+        The end cluster id or marker gene. If it is a marker gene, the cluster with the highest
+        expression of the marker gene is selected. If it is a cluster id, it is used as is.
+    subset_col : str, optional
+        The column in `adata.obs` to subset on. If None, no subsetting is performed.
+    subset_val : str, optional
+        The value in subset_column to subset on. If None, no subsetting is performed.
+    cluster_ids_list : list, optional
+        A list of cluster ids. If provided, the trajectory is the path connecting the clusters in
+        the order of the list. `start_cluster_or_marker` and `end_cluster_or_marker` are ignored.
+    subset_percent_per_cluster : float, default 0.3
+        When subsetting the cells, each cluster must have at least this proportion of cells from
+        the subset to not be discarded. This is useful to remove clusters with too few cells from
+        the subset.
+    min_cell_per_cluster : int, default 10
+        When subsetting the cells, each cluster must have at least this number of cells from the
+        subset to not be discarded. See `subset_percent_per_cluster`.
+    """
+
     def __init__(
         self,
         name: str,
@@ -154,6 +190,31 @@ class TConfig:
 
 
 def cell_clusters(adata, leiden_resolution=1.0, n_neighbors=10, seed=0, rep_key="decipher_z"):
+    """Compute the cell clusters using the scanpy Leiden algorithm on the Decipher z representation.
+
+    Parameters
+    ----------
+    adata : AnnData
+        The annotated data matrix.
+    leiden_resolution : float, default 1.0
+        The resolution of the Leiden algorithm.
+    n_neighbors : int, default 10
+        The number of neighbors to use to compute the neighbors graph.
+    seed : int, default 0
+        The random seed to use in the scanpy functions.
+    rep_key : str, default "decipher_z"
+        The key in `adata.obsm` where the Decipher z representation is stored.
+
+    Returns
+    -------
+    `adata.obs['decipher_clusters']`
+        The cluster labels.
+
+    See Also
+    --------
+    scanpy.pp.neighbors
+    scanpy.tl.leiden
+    """
 
     logger.info("Clustering cells using scanpy Leiden algorithm.")
     neighbors_key = rep_key + "_neighbors"
@@ -191,7 +252,6 @@ def _subset_cells_and_clusters(
     min_cell_per_cluster=10,
     cluster_key="decipher_clusters",
 ):
-    """ """
     data = adata.obs[[subset_column, cluster_key]].copy()
     data.columns = ["subset", "cluster"]
     data["in_subset"] = data["subset"] == subset_value
@@ -224,18 +284,21 @@ def find_cluster_with_marker(
     Parameters
     ----------
     adata : AnnData
-        The AnnData object.
+        The annotated data matrix.
     marker : str
         The marker gene.
-    subset_column : str (optional)
+    subset_column : str, optional
         The column in `adata.obs` to subset on.
-    subset_value : str (optional)
+    subset_value : str, optional
         The value in subset_column to subset on.
-    cluster_key : str
+    subset_min_percent_per_cluster : float, default 0.3
+        When subsetting the cells, each cluster must have at least this proportion of cells from
+        the subset to not be discarded. This is useful to remove clusters with too few cells from
+        the subset.
+    cluster_key : str, default "decipher_clusters"
         The key in `adata.obs` where the cluster information is stored.
-    min_cell_per_cluster : int
-        The minimum number of cells per cluster to consider it. If a cluster has fewer cells than
-        this, it is discarded. It is especially useful when subsetting the cells.
+    min_cell_per_cluster : int, default 10
+        The minimum number of cells per cluster to consider it.
     """
     if subset_column is not None:
         adata = _subset_cells_and_clusters(
@@ -257,34 +320,34 @@ def find_cluster_with_marker(
 def trajectories(
     adata,
     *trajectory_configs,
-    resolution=50,
+    point_density=50,
     cluster_key="decipher_clusters",
 ):
-    """Compute the trajectories given some start and end clusters.
+    """Compute the trajectories given some trajectory configurations.
 
     Parameters
     ----------
     adata : AnnData
-        The AnnData object.
-    trajectories_config : dict
-        A dictionary with TODO
-    resolution : int
-        The number of points per unit of length.
-    cluster_key : str
+        The annotated data matrix.
+    trajectory_configs : TConfig
+        The trajectory configurations.
+    point_density : int, default 50
+        The number of points per unit of length in the trajectory.
+    cluster_key : str, default "decipher_clusters"
         The key in `adata.obs` where the cluster ids are stored.
 
     Returns
     -------
-    The trajectories are stored in `adata.uns["decipher"]["trajectories"]`, which is a nested
-    dictionary with the structure:
-    - trajectory_name
-        - cluster_locations: the locations of the clusters in the latent space
-        - cluster_ids: the ids of the clusters
-        - points: the points of the trajectory in the latent space
-        - times: the times of the trajectory
-        - cumulative_length: the cumulative length of the trajectory
-        - density: the density of points along the trajectory
-
+    `adata.uns["decipher"]["trajectories"]`: dict
+        The trajectory inference results.
+        - trajectory_name: dict
+            - `cluster_locations`: np.ndarray (n_clusters, 2) - the locations of the clusters in
+                the latent space.
+            - `cluster_ids`: list of str - the cluster ids forming the trajectory
+            - `points`: np.ndarray (n_points, 2) - the points of the trajectory in the latent space
+                (where the number of points `n_point` in the trajectory depends on `point_density`)
+            - `times`: np.ndarray (n_points,) - the times of the trajectory.
+            - `density`: the density of points along the trajectory (= `point_density`)
     """
     rep_key = "decipher_v"
     uns_key = "trajectories"
@@ -337,7 +400,7 @@ def trajectories(
             [cluster_locations.loc[cluster_id, [0, 1]] for cluster_id in t_cluster_ids]
         ).astype(np.float32)
         trajectory = Trajectory(
-            t_cluster_locations, t_cluster_ids, point_density=resolution, rep_key=rep_key
+            t_cluster_locations, t_cluster_ids, point_density=point_density, rep_key=rep_key
         )
         adata.uns["decipher"][uns_key][t_name] = trajectory.to_dict()
         logging.info(f"Added trajectory {t_name} to `adata.uns['decipher']['{uns_key}']`.")
@@ -351,10 +414,15 @@ def decipher_time(adata, n_neighbors=10):
     Parameters
     ----------
     adata : AnnData
-        The AnnData object. The trajectories should have been computed and stored in
+        The annotated data matrix. The trajectories should have been computed and stored in
         `adata.uns["decipher"]["trajectories"]`.
     n_neighbors : int
         The number of neighbors to use for the KNN regression.
+
+    Returns
+    -------
+    `adata.obs["decipher_time"]`
+        The decipher time of each cell.
     """
     from sklearn.neighbors import KNeighborsRegressor
 
@@ -383,7 +451,7 @@ def gene_patterns(adata, l_scale=10_000, n_samples=100):
     Parameters
     ----------
     adata : AnnData
-        The AnnData object. The trajectories should have been computed and stored in
+        The annotated data matrix. The trajectories should have been computed and stored in
         `adata.uns["decipher"]["trajectories"]`.
     l_scale : float
         The library size scaling factor.
@@ -392,13 +460,13 @@ def gene_patterns(adata, l_scale=10_000, n_samples=100):
 
     Returns
     -------
-    The gene patterns are stored in `adata.uns["decipher"]["gene_patterns"]`, which is a nested
-    dictionary with the structure:
-    - trajectory_name
-        - mean: the mean gene expression pattern
-        - q25: the 25% quantile of the gene expression pattern
-        - q75: the 75% quantile of the gene expression pattern
-        - times: the times of the trajectory
+    `adata.uns["decipher"]["gene_patterns"]`: dict
+        The gene patterns for each trajectory.
+        - trajectory_name: dict
+            - `mean`: the mean gene expression pattern
+            - `q25`: the 25% quantile of the gene expression pattern
+            - `q75`: the 75% quantile of the gene expression pattern
+            - `times`: the times of the trajectory
     """
     uns_decipher_key = "gene_patterns"
     model = decipher_load_model(adata)
