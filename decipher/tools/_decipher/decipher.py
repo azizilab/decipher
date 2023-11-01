@@ -151,7 +151,7 @@ class Decipher(nn.Module):
                 pyro.sample("v", posterior_v)
         return z_loc, v_loc, z_scale, v_scale
 
-    def compute_v_z_numpy(self, x: np.array, return_scale=False):
+    def compute_v_z_numpy(self, x: np.array):
         """Compute decipher_v and decipher_z for a given input.
 
         Parameters
@@ -176,14 +176,11 @@ class Decipher(nn.Module):
         """
         if type(x) == np.ndarray:
             x = torch.tensor(x, dtype=torch.float32)
-        z_loc, v_loc, z_scale, v_scale = self.guide(x)
-        if return_scale:
-            return (
-                v_loc.detach().numpy(),
-                z_loc.detach().numpy(),
-                v_scale.detach().numpy(),
-                z_scale.detach().numpy(),
-            )
+
+        x = torch.log1p(x)
+        z_loc, _ = self.encoder_x_to_z(x)
+        zx = torch.cat([z_loc, x], dim=-1)
+        v_loc, _ = self.encoder_zx_to_v(zx)
         return v_loc.detach().numpy(), z_loc.detach().numpy()
 
     def impute_gene_expression_numpy(self, x):
