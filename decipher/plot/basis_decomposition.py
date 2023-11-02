@@ -1,6 +1,6 @@
 import numpy as np
-from matplotlib import pyplot as plt
 import seaborn as sns
+from matplotlib import pyplot as plt
 
 
 def basis(adata, colors=None, figsize=(5, 2.5), linewidth=3, ax=None):

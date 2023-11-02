@@ -4,7 +4,6 @@ import numpy as np
 import pandas as pd
 
 from decipher.tools._basis_decomposition.inference import InferenceMode
-
 from decipher.tools._basis_decomposition.run import (
     compute_basis_decomposition as run_compute_basis_decomposition,
     get_basis,
@@ -198,10 +197,9 @@ def disruption_scores(adata, pattern_name_a=0, pattern_name_b=1):
     logger.info("Added `.var['decipher_disruption_combined']`: combined disruption scores")
 
     n_samples = shape_disruption.shape[0]
-    # repeat the gene names n_samples times
     disruptions_samples = pd.DataFrame(
         {
-            "gene": np.tile(adata.var_names, n_samples),
+            "gene": np.tile(adata.var_names, n_samples),  # repeat the gene names n_samples times
             "shape": shape_disruption.reshape(-1),
             "combined": combined_disruption.reshape(-1),
         }

@@ -1,11 +1,11 @@
 import logging
 import os
-import randomname
 import time
 
+import randomname
 import torch
-import torch.utils.data
 import torch.nn.functional
+import torch.utils.data
 
 from decipher.tools._decipher import Decipher, DecipherConfig
 from decipher.utils import DECIPHER_GLOBALS, create_decipher_uns_key
@@ -13,7 +13,7 @@ from decipher.utils import DECIPHER_GLOBALS, create_decipher_uns_key
 logger = logging.getLogger(__name__)
 logging.basicConfig(
     format="%(asctime)s | %(levelname)s : %(message)s",
-    level=logging.INFO,  # stream=sys.stdout
+    level=logging.INFO,
 )
 
 
@@ -37,7 +37,7 @@ def decipher_save_model(adata, model, overwrite=False):
     if "run_id" not in adata.uns["decipher"] or not overwrite:
         adata.uns["decipher"]["run_id"] = get_random_name()
         adata.uns["decipher"]["run_id_history"].append(adata.uns["decipher"]["run_id"])
-        logging.info(f"Saving decipher _decipher with run_id {adata.uns['decipher']['run_id']}.")
+        logging.info(f"Saving decipher model with run_id {adata.uns['decipher']['run_id']}.")
     else:
         logging.info("Overwriting existing decipher model.")
 
@@ -50,9 +50,23 @@ def decipher_save_model(adata, model, overwrite=False):
 
 
 def decipher_load_model(adata):
+    """Load a decipher model whose name is stored in the given AnnData.
+
+    `adata.uns["decipher"]["run_id"]` must be set to the name of the decipher model to load.
+
+    Parameters
+    ----------
+    adata : sc.AnnData
+        The annotated data matrix.
+
+    Returns
+    -------
+    model : Decipher
+        The decipher model.
+    """
     create_decipher_uns_key(adata)
     if "run_id" not in adata.uns["decipher"]:
-        raise ValueError("No decipher _decipher has been saved for this AnnData object.")
+        raise ValueError("No decipher model has been saved for this AnnData object.")
 
     model_config = DecipherConfig(**adata.uns["decipher"]["config"])
     model = Decipher(model_config)

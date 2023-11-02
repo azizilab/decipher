@@ -1,5 +1,4 @@
 import dataclasses
-import logging
 from dataclasses import dataclass
 from typing import Sequence, Union
 
@@ -159,20 +158,12 @@ class Decipher(nn.Module):
         x : np.ndarray or torch.Tensor
             Input data of shape (n_cells, n_genes).
 
-        return_scale : bool (default: False)
-            Whether to return the scale of the posterior distributions.
-
         Returns
         -------
         v : np.ndarray
             Decipher components v of shape (n_cells, dim_v).
         z : np.ndarray
             Decipher latent z of shape (n_cells, dim_z).
-        If return_scale is True, also returns:
-        v_scale : np.ndarray
-            Scale of the posterior distribution of v.
-        z_scale : np.ndarray
-            Scale of the posterior distribution of z.
         """
         if type(x) == np.ndarray:
             x = torch.tensor(x, dtype=torch.float32)

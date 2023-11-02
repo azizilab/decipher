@@ -1,9 +1,9 @@
 import logging
 
-import numpy as np
-from matplotlib import pyplot as plt
 import matplotlib.patheffects as pe
+import numpy as np
 import seaborn as sns
+from matplotlib import pyplot as plt
 from sklearn.neighbors import KNeighborsClassifier
 
 from decipher.plot.decipher import decipher as plot_decipher_v
@@ -11,7 +11,7 @@ from decipher.plot.decipher import decipher as plot_decipher_v
 logger = logging.getLogger(__name__)
 logging.basicConfig(
     format="%(asctime)s | %(levelname)s : %(message)s",
-    level=logging.INFO,  # stream=sys.stdout
+    level=logging.INFO,
 )
 
 

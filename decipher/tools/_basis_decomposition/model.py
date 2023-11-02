@@ -1,10 +1,9 @@
-import pyro
-from pyro.nn import PyroModule
-import pyro.distributions as dist
-
-import torch
 import numpy as np
 import pandas as pd
+import pyro
+import pyro.distributions as dist
+import torch
+from pyro.nn import PyroModule
 
 
 class RealFunction(pyro.nn.PyroModule):

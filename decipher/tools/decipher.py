@@ -22,7 +22,7 @@ from decipher.tools.utils import EarlyStopping
 logger = logging.getLogger(__name__)
 logging.basicConfig(
     format="%(asctime)s | %(levelname)s : %(message)s",
-    level=logging.INFO,  # stream=sys.stdout
+    level=logging.INFO,
 )
 
 
@@ -46,7 +46,6 @@ def _make_train_val_split(adata, val_frac, seed):
     n_val = int(val_frac * adata.shape[0])
     cell_idx = np.arange(adata.shape[0])
     np.random.default_rng(seed).shuffle(cell_idx)
-    # train_idx = cell_idx[:-n_val]
     val_idx = cell_idx[-n_val:]
     adata.obs["decipher_split"] = "train"
     adata.obs.loc[adata.obs.index[val_idx], "decipher_split"] = "validation"
@@ -93,7 +92,6 @@ def decipher_train(
     pyro.clear_param_store()
     pyro.util.set_rng_seed(decipher_config.seed)
 
-    # split data into train and validation
     _make_train_val_split(adata, decipher_config.val_frac, decipher_config.seed)
     train_idx = adata.obs["decipher_split"] == "train"
     val_idx = adata.obs["decipher_split"] == "validation"
@@ -108,7 +106,6 @@ def decipher_train(
     dataloader_train = make_data_loader_from_adata(adata_train, decipher_config.batch_size)
     dataloader_val = make_data_loader_from_adata(adata_val, decipher_config.batch_size)
 
-    # dataloader = make_data_loader_from_adata(adata, decipher_config.batch_size)
     decipher = Decipher(
         config=decipher_config,
     )
@@ -187,16 +184,14 @@ def decipher_rotate_space(
         Column name in `adata.obs` to align the first decipher component with.
         If None, only align the second component (or does not align at all if `v2` is also None).
     v1_order: list, optional
-        Ordered list of categorical values in `adata.obs[v1]` to use for the alignment. The
-        alignment will attempt to align the ordered values in `v1_values` along `v1`.
-        Must be provided if `adata.obs[v1]` is not numeric.
+        List of values in `adata.obs[v1_col]`. The rotation will attempt to align these values in
+        order along the v1 component. Must be provided if `adata.obs[v1_col]` is not numeric.
     v2_col: str, optional
         Column name in `adata.obs` to align the second decipher component with.
         If None, only align the first component (or does not align at all if `v1` is also None).
     v2_order: list, optional
-        Ordered list of categorical values in `adata.obs[v2]` to use for the alignment. The
-        alignment will attempt to align the ordered values in `v2_values` along `v2`.
-        Must be provided if `adata.obs[v2]` is not numeric.
+        List of values in `adata.obs[v2_col]`. The rotation will attempt to align these values in
+        order along the v2 component. Must be provided if `adata.obs[v2_col]` is not numeric.
     auto_flip_decipher_z: bool, default True
         If True, flip each z to be correlated positively with the components.
 
@@ -204,14 +199,14 @@ def decipher_rotate_space(
     -------
     `adata.obsm['decipher_v']`: ndarray
         The decipher v space after rotation.
-    `adata.obsm['decipher_v_not_rotated']`: ndarray
-        The decipher v space before rotation.
     `adata.obsm['decipher_z']`: ndarray
         The decipher z space after flipping.
-    `adata.obsm['decipher_z_not_rotated']`: ndarray
-        The decipher z space before flipping.
     `adata.uns['decipher']['rotation']`: ndarray
         The rotation matrix used to rotate the decipher v space.
+    `adata.obsm['decipher_v_not_rotated']`: ndarray
+        The decipher v space before rotation.
+    `adata.obsm['decipher_z_not_rotated']`: ndarray
+        The decipher z space before flipping.
     """
     decipher = decipher_load_model(adata)
     _decipher_to_adata(decipher, adata)

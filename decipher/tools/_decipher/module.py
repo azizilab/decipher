@@ -8,7 +8,6 @@ import torch.nn as nn
 class ConditionalDenseNN(torch.nn.Module):
     """Dense neural network with multiple outputs, optionally conditioned on a context variable.
 
-    TODO add documentation details
     (Derived from pyro.nn.dense_nn.ConditionalDenseNN with some modifications [1])
 
     Parameters
@@ -52,7 +51,6 @@ class ConditionalDenseNN(torch.nn.Module):
         self.output_total_dim = sum(self.output_dims)
 
         # The multiple outputs are computed as a single output layer, and then split
-        # We calculate the indices of each output layer here
         indices = np.concatenate(([0], np.cumsum(self.output_dims)))
         self.output_slices = [slice(s, e) for s, e in zip(indices[:-1], indices[1:])]
 
@@ -77,7 +75,6 @@ class ConditionalDenseNN(torch.nn.Module):
 
         self.layers = torch.nn.ModuleList(layers)
 
-        # Save the activation
         self.f = activation
         self.batch_norms = torch.nn.ModuleList(batch_norms)
 

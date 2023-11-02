@@ -44,16 +44,6 @@ class Trajectory:
 
         self.trajectory_latent, self.trajectory_time = self._linspace(self.n_points)
 
-    # def sample_uniformly(self, n_samples, seed=0):
-    #     rng = np.random.default_rng(seed)
-    #     indices = rng.integers(0, len(self.trajectory_latent), size=n_samples)
-    #     return self.trajectory_latent[indices], self.trajectory_time[indices]
-
-    # def _compute_cell_types(self, adata, cell_type_key, n_neighbors=50):
-    #     knc = KNeighborsClassifier(n_neighbors=n_neighbors)
-    #     knc.fit(adata.obsm[self.rep_key], adata.obs[cell_type_key])
-    #     self.cell_types = knc.predict(self.trajectory_latent)
-
     def _linspace(self, num=100):
         total_length = self.cumulative_length[-1]
         times = np.linspace(0, total_length, num)

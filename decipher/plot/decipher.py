@@ -132,7 +132,6 @@ def decipher(
     if len(color) == 1:
         ax.set_title(title)
 
-    # set labels and remove spines
     for i, ax in enumerate(fig.axes):
         if ax._label == "<colorbar>":
             continue
