@@ -22,6 +22,7 @@ def compute_basis_decomposition(
     seed=1,
     normalized_mode=True,
     times=None,
+    plot_every_k_epochs=-1,
 ):
     pyro.set_rng_seed(seed)
     gene_patterns = torch.FloatTensor(gene_patterns)
@@ -51,7 +52,7 @@ def compute_basis_decomposition(
     losses = []
     early_stopping = EarlyStopping(patience=100)
     pbar = tqdm(range(num_iterations))
-    for _ in pbar:
+    for epoch in pbar:
         # calculate the loss and take a gradient step
         loss = svi.step(times, gene_patterns)
         reconstruction = ((model._last_patterns - gene_patterns) ** 2).mean().item()
@@ -63,7 +64,7 @@ def compute_basis_decomposition(
         if early_stopping(loss):
             break
 
-        if _ % 100 == 0:
+        if plot_every_k_epochs > 0 and epoch % plot_every_k_epochs == 0:
             from IPython.core import display
 
             basis = model._last_basis.detach().numpy()

@@ -1,4 +1,5 @@
 import logging
+import os
 
 import numpy as np
 import pyro
@@ -18,6 +19,7 @@ from decipher.tools._decipher.data import (
     make_data_loader_from_adata,
 )
 from decipher.tools.utils import EarlyStopping
+from decipher.utils import DECIPHER_GLOBALS, GIFMaker, is_notebook, load_and_show_gif
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(
@@ -59,7 +61,7 @@ def _make_train_val_split(adata, val_frac, seed):
 def decipher_train(
     adata: sc.AnnData,
     decipher_config=DecipherConfig(),
-    plot_every_k_epoch=-1,
+    plot_every_k_epochs=-1,
     plot_kwargs=None,
 ):
     """Train a decipher model.
@@ -70,7 +72,7 @@ def decipher_train(
         The annotated data matrix.
     decipher_config: DecipherConfig, optional
         Configuration for the decipher model.
-    plot_every_k_epoch: int, optional
+    plot_every_k_epochs: int, optional
         If > 0, plot the decipher space every `plot_every_k_epoch` epochs.
         Default: -1 (no plots).
     plot_kwargs: dict, optional
@@ -89,6 +91,14 @@ def decipher_train(
     `adata.obsm['decipher_z']`: ndarray
         The decipher z space.
     """
+
+    if is_notebook() and plot_every_k_epochs == -1:
+        plot_every_k_epochs = 5
+        logger.info(
+            "Plotting decipher space every 5 epochs by default. "
+            "Set `plot_every_k_epoch` to -2 to disable."
+        )
+
     pyro.clear_param_store()
     pyro.util.set_rng_seed(decipher_config.seed)
 
@@ -117,6 +127,8 @@ def decipher_train(
     )
     elbo = Trace_ELBO()
     svi = SVI(decipher.model, decipher.guide, optimizer, elbo)
+    gif_maker = GIFMaker(dpi=120)
+
     # Training loop
     val_losses = []
     early_stopping = EarlyStopping(patience=5)
@@ -147,13 +159,36 @@ def decipher_train(
             print("Early stopping.")
             break
 
-        if plot_every_k_epoch > 0 and (epoch % plot_every_k_epoch == 0):
+        if plot_every_k_epochs > 0 and (epoch % plot_every_k_epochs == 0):
             _decipher_to_adata(decipher, adata)
             plot_decipher_v(adata, basis="decipher_v", **plot_kwargs)
-            plt.show()
+            gif_maker.add_image(plt.gcf())
+            if is_notebook():
+                from IPython.core import display
+
+                display.clear_output(wait=True)
+                display.display(plt.gcf())
+            else:
+                plt.show()
+            plt.close()
+
+    if is_notebook():
+        from IPython.core import display
+
+        display.clear_output()
+        pbar.display()
 
     _decipher_to_adata(decipher, adata)
     decipher_save_model(adata, decipher)
+
+    model_run_id = adata.uns["decipher"]["run_id"]
+    save_folder = DECIPHER_GLOBALS["save_folder"]
+    full_path = os.path.join(save_folder, model_run_id, "decipher_training.gif")
+    gif_maker.save_gif(full_path)
+
+    if is_notebook():
+        load_and_show_gif(full_path)
+
     plot_decipher_v(adata, basis="decipher_v", **plot_kwargs)
 
     return decipher, val_losses

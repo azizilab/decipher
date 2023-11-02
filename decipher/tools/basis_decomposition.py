@@ -8,6 +8,7 @@ from decipher.tools._basis_decomposition.run import (
     compute_basis_decomposition as run_compute_basis_decomposition,
     get_basis,
 )
+from decipher.utils import is_notebook
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(
@@ -24,6 +25,7 @@ def basis_decomposition(
     lr=5e-3,
     beta_prior=1,
     seed=0,
+    plot_every_k_epochs=-1,
 ):
     """Compute the basis decomposition of gene patterns.
 
@@ -44,6 +46,8 @@ def basis_decomposition(
         The prior on the beta parameter. The lower the value, the more sparse the betas.
     seed : int, default 0
         The random seed to use.
+    plot_every_k_epochs : int, default -1, or 100 in jupyter notebook
+        Plot the loss every `plot_every_k_epochs` epochs. If <0, do not plot.
 
     Returns
     -------
@@ -63,6 +67,12 @@ def basis_decomposition(
     `adata.varm['decipher_betas_{pattern_name}']` : np.ndarray
         The betas of the pattern `pattern_name` for each gene.
     """
+    if is_notebook() and plot_every_k_epochs == -1:
+        plot_every_k_epochs = 100
+        logger.info(
+            "Plotting the loss every %d epochs. Set `plot_every_k_epochs` to -2 to disable this "
+            "behavior." % plot_every_k_epochs
+        )
     if pattern_names is None:
         pattern_names = list(adata.uns["decipher"]["gene_patterns"].keys())
     gene_patterns = [
@@ -85,6 +95,7 @@ def basis_decomposition(
         beta_prior=beta_prior,
         seed=seed,
         times=gene_patterns_times,
+        plot_every_k_epochs=plot_every_k_epochs,
     )
     gene_scales = gene_scales.detach().numpy()
     basis = get_basis(trajectory_model, guide, gene_patterns, times)
