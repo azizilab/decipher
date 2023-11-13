@@ -311,6 +311,24 @@ def decipher_gene_imputation(adata):
     logging.info("Added `.layers['imputed']`: the Decipher imputed data.")
 
 
+def decipher_and_gene_covariance(adata):
+    if "decipher_imputed" not in adata.layers:
+        decipher_gene_imputation(adata)
+    gene_expression_imputed = adata.layers["decipher_imputed"]
+    adata.varm["decipher_v_gene_covariance"] = np.cov(
+        gene_expression_imputed,
+        y=adata.obsm["decipher_v"],
+        rowvar=False,
+    )[: adata.X.shape[1], adata.X.shape[1]:]
+    logging.info("Added `.varm['decipher_v_gene_covariance']`: the covariance between Decipher v and each gene.")
+    adata.varm["decipher_z_gene_covariance"] = np.cov(
+        gene_expression_imputed,
+        y=adata.obsm["decipher_z"],
+        rowvar=False,
+    )[: adata.X.shape[1], adata.X.shape[1]:]
+    logging.info("Added `.varm['decipher_z_gene_covariance']`: the covariance between Decipher z and each gene.")
+
+
 def _decipher_to_adata(decipher, adata):
     """Compute the decipher v and z spaces from the decipher model. Add them to `adata.obsm`.
 
