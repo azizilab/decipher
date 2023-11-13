@@ -99,11 +99,13 @@ def basis_decomposition(
     )
     gene_scales = gene_scales.detach().numpy()
     basis = get_basis(trajectory_model, guide, gene_patterns, times)
-    betas_mean = samples["beta"]["mean"].squeeze().detach().numpy()
+    betas_shape = [*gene_patterns.shape[:2], n_basis]
+    betas_mean = samples["beta"]["mean"].detach().numpy().reshape(betas_shape)
+
     adata.uns["decipher"]["basis_decomposition"] = {
         "scales": gene_scales,
         "betas": betas_mean,
-        "betas_samples": samples["beta"]["values"].squeeze().detach().numpy(),
+        "betas_samples": samples["beta"]["values"].detach().numpy().reshape([-1] + betas_shape),
         "basis": basis,
         "times": times.detach().numpy(),
         "length": min_len,
