@@ -274,10 +274,10 @@ def decipher_rotate_space(
     if v1_col is not None or v2_col is not None:
         rotation_scores = []
         for t in np.linspace(0, 2 * np.pi, 100):
-            for u in [-1, 1]:
+            for u in [1, -1]:
                 rotation = rot(t, u)
                 rotation_scores.append((score_rotation(rotation), rotation))
-        best_rotation = max(rotation_scores)[1]
+        best_rotation = max(rotation_scores, key=lambda x: x[0])[1]
 
         adata.obsm["decipher_v_not_rotated"] = adata.obsm["decipher_v"].copy()
         adata.obsm["decipher_v"] = adata.obsm["decipher_v"] @ best_rotation
