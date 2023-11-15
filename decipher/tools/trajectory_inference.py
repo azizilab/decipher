@@ -247,7 +247,7 @@ def _subset_cells_and_clusters(
     data["in_subset"] = data["subset"] == subset_value
     # clusters that contains too few cells in the subset are discarded
     # 1) the proportion of cells from the subset in the cluster is too low
-    valid_p = data.groupby("cluster").mean()["in_subset"] > subset_min_percent_per_cluster
+    valid_p = data.groupby("cluster")["in_subset"].mean() > subset_min_percent_per_cluster
     # 2) the number of cells from the subset in the cluster is too low
     valid_n = data.groupby("cluster")["in_subset"].sum() > min_cell_per_cluster
     valid_clusters = valid_p & valid_n
