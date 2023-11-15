@@ -89,7 +89,6 @@ class Decipher(nn.Module):
         self._epsilon = 1e-5
 
         self.theta = None
-        print("V5")
 
     def model(self, x, context=None):
         pyro.module("decipher", self)

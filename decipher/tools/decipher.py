@@ -156,7 +156,6 @@ def decipher_train(
             f"Epoch {epoch} | train elbo: {train_elbo:.2f} | val ll:" f" {val_nll:.2f}"
         )
         if early_stopping(val_nll):
-            print("Early stopping.")
             break
 
         if plot_every_k_epochs > 0 and (epoch % plot_every_k_epochs == 0):
@@ -178,6 +177,8 @@ def decipher_train(
         display.clear_output()
         pbar.display()
 
+    if early_stopping.has_stopped():
+        logger.info("Early stopping has been triggered.")
     _decipher_to_adata(decipher, adata)
     decipher_save_model(adata, decipher)
 
