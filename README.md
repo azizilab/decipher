@@ -1,4 +1,4 @@
-<img src=figures/logo_decipher.png width="400" />
+<img src=figures/logo_decipher.png width="300" />
 
 ## Decipher
 
