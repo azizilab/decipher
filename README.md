@@ -1,3 +1,5 @@
+<img src=figures/logo_decipher.png width="400" />
+
 ## Decipher
 
 Decipher is a single-cell analysis toolkit to jointly analyze samples from distinct 
