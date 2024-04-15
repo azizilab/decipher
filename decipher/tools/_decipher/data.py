@@ -2,8 +2,10 @@ import logging
 import os
 import time
 
+import numpy as np
 import randomname
 import torch
+import torch.distributions
 import torch.nn.functional
 import torch.utils.data
 
@@ -15,6 +17,13 @@ logging.basicConfig(
     format="%(asctime)s | %(levelname)s : %(message)s",
     level=logging.INFO,
 )
+
+
+def get_dense_X(adata):
+    if isinstance(adata.X, np.ndarray):
+        return adata.X
+    else:
+        return adata.X.toarray()
 
 
 def get_random_name(seed=None):
@@ -78,8 +87,9 @@ def decipher_load_model(adata):
     return model
 
 
-def make_data_loader_from_adata(adata, batch_size=64, context_discrete_keys=None):
-    genes = torch.FloatTensor(adata.X.todense())
+def make_data_loader_from_adata(adata, batch_size=64, context_discrete_keys=None, **kwargs):
+    """Create a PyTorch DataLoader from an AnnData object."""
+    genes = torch.FloatTensor(get_dense_X(adata))
     params = [genes]
     context_tensors = []
     if context_discrete_keys is None:
@@ -98,4 +108,5 @@ def make_data_loader_from_adata(adata, batch_size=64, context_discrete_keys=None
         torch.utils.data.TensorDataset(*params),
         batch_size=batch_size,
         shuffle=True,
+        **kwargs,
     )
