@@ -17,6 +17,7 @@ from decipher.tools._decipher.data import (
     decipher_load_model,
     decipher_save_model,
     make_data_loader_from_adata,
+    get_dense_X,
 )
 from decipher.tools.utils import EarlyStopping
 from decipher.utils import DECIPHER_GLOBALS, GIFMaker, is_notebook, load_and_show_gif
@@ -28,20 +29,27 @@ logging.basicConfig(
 )
 
 
-def predictive_log_likelihood(decipher, dataloader):
-    """Compute the predictive log likelihood of the decipher model."""
-    if type(dataloader) == sc.AnnData:
-        dataloader = make_data_loader_from_adata(dataloader, decipher.config.batch_size)
+def predictive_log_likelihood(decipher, dataloader, n_samples=30):
+    log_weights = []
+    old_beta = decipher.config.beta
+    decipher.config.beta = 1.0
+    try:
+        for i in range(n_samples):
+            total_log_prob = 0
+            for xc in dataloader:
+                xc = [x.to(decipher.device) for x in xc]
+                guide_trace = poutine.trace(decipher.guide).get_trace(*xc)
+                model_trace = poutine.trace(
+                    poutine.replay(decipher.model, trace=guide_trace)
+                ).get_trace(*xc)
+                total_log_prob += model_trace.log_prob_sum() - guide_trace.log_prob_sum()
+            log_weights.append(total_log_prob)
 
-    decipher.eval()
-    log_likelihood = 0
-    for xc in dataloader:
-        guide_trace = poutine.trace(decipher.guide).get_trace(*xc)
-        replayed_model = poutine.replay(decipher.model, trace=guide_trace)
-        blocked_replayed_model = poutine.block(replayed_model, expose=["x"])
-        model_trace = poutine.trace(blocked_replayed_model).get_trace(*xc)
-        log_likelihood += model_trace.log_prob_sum().item()
-    return log_likelihood / len(dataloader.dataset)
+    finally:
+        decipher.config.beta = old_beta
+
+    log_z = torch.logsumexp(torch.tensor(log_weights) - np.log(n_samples), 0)
+    return log_z.item()
 
 
 def _make_train_val_split(adata, val_frac, seed):
@@ -114,6 +122,9 @@ def decipher_train(
     decipher_config.initialize_from_adata(adata_train)
 
     dataloader_train = make_data_loader_from_adata(adata_train, decipher_config.batch_size)
+    dataloader_train = make_data_loader_from_adata(
+        adata_train, decipher_config.batch_size, drop_last=True
+    )
     dataloader_val = make_data_loader_from_adata(adata_val, decipher_config.batch_size)
 
     decipher = Decipher(
@@ -131,7 +142,14 @@ def decipher_train(
 
     # Training loop
     val_losses = []
-    early_stopping = EarlyStopping(patience=5)
+    if (
+        decipher_config.early_stopping_patience is not None
+        and decipher_config.early_stopping_patience > 0
+    ):
+        early_stopping = EarlyStopping(patience=decipher_config.early_stopping_patience)
+    else:
+        early_stopping = EarlyStopping(patience=int(1e30))
+
     pbar = tqdm(range(decipher_config.n_epochs))
     for epoch in pbar:
         train_losses = []
@@ -348,7 +366,7 @@ def _decipher_to_adata(decipher, adata):
         The decipher z space.
     """
     decipher.eval()
-    latent_v, latent_z = decipher.compute_v_z_numpy(adata.X.toarray())
+    latent_v, latent_z = decipher.compute_v_z_numpy(get_dense_X(adata))
     adata.obsm["decipher_v"] = latent_v
     adata.obsm["decipher_z"] = latent_z
     logging.info("Added `.obsm['decipher_v']`: the Decipher v space.")

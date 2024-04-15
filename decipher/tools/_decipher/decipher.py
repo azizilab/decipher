@@ -1,6 +1,6 @@
 import dataclasses
 from dataclasses import dataclass
-from typing import Sequence, Union
+from typing import Optional, Sequence, Union
 
 import numpy as np
 import pyro
@@ -28,7 +28,8 @@ class DecipherConfig:
     learning_rate: float = 5e-3
     val_frac: float = 0.1
     batch_size: int = 64
-    n_epochs: int = 100
+    n_epochs: int = 1000
+    early_stopping_patience: Optional[int] = 10
 
     dim_genes: int = None
     n_cells: int = None
@@ -72,6 +73,7 @@ class Decipher(nn.Module):
             )
 
         self.config = config
+        self.dummy_param = nn.Parameter(torch.empty(0))
 
         self.decoder_v_to_z = ConditionalDenseNN(
             self.config.dim_v, self.config.layers_v_to_z, [self.config.dim_z] * 2
@@ -90,12 +92,16 @@ class Decipher(nn.Module):
 
         self.theta = None
 
+    @property
+    def device(self):
+        return self.dummy_param.device
+
     def model(self, x, context=None):
         pyro.module("decipher", self)
 
         self.theta = pyro.param(
-            "inverse_dispersion",
-            1.0 * x.new_ones(self.config.dim_genes),
+            "theta",
+            x.new_ones(self.config.dim_genes),
             constraint=constraints.positive,
         )
 
@@ -123,7 +129,7 @@ class Decipher(nn.Module):
                 self.theta + self._epsilon
             )
             # noinspection PyUnresolvedReferences
-            x_dist = dist.NegativeBinomial(total_count=self.theta, logits=logit)
+            x_dist = dist.NegativeBinomial(total_count=self.theta + self._epsilon, logits=logit)
             pyro.sample("x", x_dist.to_event(1), obs=x)
 
     def guide(self, x, context=None):
