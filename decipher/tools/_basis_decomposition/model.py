@@ -3,7 +3,6 @@ import pandas as pd
 import pyro
 import pyro.distributions as dist
 import torch
-from pyro.nn import PyroModule
 
 
 class RealFunction(pyro.nn.PyroModule):
@@ -15,12 +14,12 @@ class RealFunction(pyro.nn.PyroModule):
         for in_features, out_features in zip(dimensions, dimensions[1:]):
             layer = pyro.nn.PyroModule[torch.nn.Linear](in_features, out_features)
             layer.weight = pyro.nn.PyroSample(
-                dist.Normal(0.0, 1.0 / in_features ** 0.5)
+                dist.Normal(0.0, 1.0 / in_features**0.5)
                 .expand(torch.Size([out_features, in_features]))
                 .to_event(2)
             )
             layer.bias = pyro.nn.PyroSample(
-                dist.Normal(0.0, 1.0 / in_features ** 0.5)
+                dist.Normal(0.0, 1.0 / in_features**0.5)
                 .expand(torch.Size([out_features]))
                 .to_event(1)
             )

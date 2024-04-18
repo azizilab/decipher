@@ -390,7 +390,10 @@ def trajectories(
             [cluster_locations.loc[cluster_id, [0, 1]] for cluster_id in t_cluster_ids]
         ).astype(np.float32)
         trajectory = Trajectory(
-            t_cluster_locations, t_cluster_ids, point_density=point_density, rep_key=rep_key
+            t_cluster_locations,
+            t_cluster_ids,
+            point_density=point_density,
+            rep_key=rep_key,
         )
         adata.uns["decipher"][uns_key][t_name] = trajectory.to_dict()
         logging.info(f"Added trajectory {t_name} to `adata.uns['decipher']['{uns_key}']`.")

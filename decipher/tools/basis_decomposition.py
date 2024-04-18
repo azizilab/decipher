@@ -149,11 +149,11 @@ def disruption_scores(adata, pattern_name_a=0, pattern_name_b=1):
     `adata.uns['decipher']['disruption_scores_samples']` : pd.DataFrame
         The disruption scores for each gene sampled from the posterior.
     """
-    if type(pattern_name_a) == str:
+    if isinstance(pattern_name_a, str):
         pattern_name_a = adata.uns["decipher"]["basis_decomposition"]["pattern_names"].index(
             pattern_name_a
         )
-    if type(pattern_name_b) == str:
+    if isinstance(pattern_name_b, str):
         pattern_name_b = adata.uns["decipher"]["basis_decomposition"]["pattern_names"].index(
             pattern_name_b
         )

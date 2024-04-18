@@ -63,7 +63,7 @@ class Decipher(nn.Module):
         config: Union[DecipherConfig, dict] = DecipherConfig(),
     ):
         super().__init__()
-        if type(config) == dict:
+        if isinstance(config, dict):
             config = DecipherConfig(**config)
 
         if not config._initialized_from_adata:
@@ -85,7 +85,9 @@ class Decipher(nn.Module):
             self.config.dim_genes, [128], [self.config.dim_z] * 2
         )
         self.encoder_zx_to_v = ConditionalDenseNN(
-            self.config.dim_genes + self.config.dim_z, [128], [self.config.dim_v, self.config.dim_v]
+            self.config.dim_genes + self.config.dim_z,
+            [128],
+            [self.config.dim_v, self.config.dim_v],
         )
 
         self._epsilon = 1e-5

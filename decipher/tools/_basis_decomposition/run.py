@@ -56,7 +56,7 @@ def compute_basis_decomposition(
         # calculate the loss and take a gradient step
         loss = svi.step(times, gene_patterns)
         reconstruction = ((model._last_patterns - gene_patterns) ** 2).mean().item()
-        reconstruction_rel = reconstruction / (gene_patterns ** 2).mean()
+        reconstruction_rel = reconstruction / (gene_patterns**2).mean()
         pbar.set_description(
             "Loss: %.1f - Relative Error: %.2f%%" % (loss, reconstruction_rel * 100)
         )

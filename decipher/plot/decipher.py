@@ -126,7 +126,7 @@ def decipher(
             **kwargs,
         )
     ax = fig.axes[0]
-    if color is None or type(color) == str:
+    if color is None or isinstance(color, str):
         color = [color]
 
     if len(color) == 1:

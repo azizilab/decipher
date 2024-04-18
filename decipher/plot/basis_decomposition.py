@@ -2,6 +2,8 @@ import numpy as np
 import seaborn as sns
 from matplotlib import pyplot as plt
 
+from .trajectory_inference import gene_patterns as plot_gene_patterns
+
 
 def basis(adata, colors=None, figsize=(5, 2.5), linewidth=3, ax=None):
     """Plot the basis functions learned by the basis decomposition.
@@ -43,9 +45,6 @@ def basis(adata, colors=None, figsize=(5, 2.5), linewidth=3, ax=None):
     return fig
 
 
-from .trajectory_inference import gene_patterns as plot_gene_patterns
-
-
 def gene_patterns_decomposition(
     adata,
     gene_name,
@@ -82,7 +81,7 @@ def gene_patterns_decomposition(
 
     ax.set_yticks(range(n_basis)[::-1])
     ax.set_xlim(0, 1)
-    ax.set_yticklabels([f"$\\beta_%d$" % i for i in range(n_basis)], fontsize=12)
+    ax.set_yticklabels(["$\\beta_%d$" % i for i in range(n_basis)], fontsize=12)
 
     for ax in axes:
         ax.set_xticks([])
@@ -103,7 +102,7 @@ def disruption_scores(
             key=lambda gn: np.mean(adata.uns["decipher"]["disruption_scores"].loc[gn, sort_by]),
         )
     fig, axs = plt.subplots(2, 1, figsize=figsize, sharex="col")
-    for (ax, col) in zip(axs, ["shape", "combined"]):
+    for ax, col in zip(axs, ["shape", "combined"]):
         sns.boxplot(
             data=adata.uns["decipher"]["disruption_scores_samples"],
             x="gene",

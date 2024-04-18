@@ -2,8 +2,8 @@
 
 ## Decipher
 
-Decipher is a single-cell analysis toolkit to jointly analyze samples from distinct 
-conditions (e.g. normal vs perturbed samples). 
+Decipher is a single-cell analysis toolkit to jointly analyze samples from distinct
+conditions (e.g. normal vs perturbed samples).
 
 ## Install
 Decipher is available on PyPI under the name `scdecipher`.
@@ -47,4 +47,3 @@ _Deep generative model Deciphers derailed trajectories in Acute Myeloid Leukemia
 ```
 Nazaret Achille, Fan Joy Linyue, Lavallee Vincent-Philippe, Cornish Andrew E., Kiseliovas Vaidotas et al. "Deep generative model deciphers derailed trajectories in acute myeloid leukemia." bioRxiv (2023).
 ```
-

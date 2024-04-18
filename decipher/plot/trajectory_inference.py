@@ -17,7 +17,10 @@ logging.basicConfig(
 
 def cell_clusters(adata, legend_loc="on data", legend_fontsize=10):
     return plot_decipher_v(
-        adata, color="decipher_clusters", legend_loc=legend_loc, legend_fontsize=legend_fontsize
+        adata,
+        color="decipher_clusters",
+        legend_loc=legend_loc,
+        legend_fontsize=legend_fontsize,
     )
 
 
@@ -56,7 +59,7 @@ def trajectories(
     ax = fig.axes[0]
     if trajectory_names is None:
         trajectory_names = adata.uns["decipher"]["trajectories"].keys()
-    if type(trajectory_names) == str:
+    if isinstance(trajectory_names, str):
         trajectory_names = [trajectory_names]
 
     default_color_palette = sns.color_palette(n_colors=len(trajectory_names))
@@ -134,7 +137,7 @@ def gene_patterns(
         patterns as `pattern_names`. It is useful to use a subset of the gene patterns to avoid
         multiple bands.
     """
-    if type(gene_name) == list:
+    if isinstance(gene_name, list):
         gene_id = [adata.var_names.tolist().index(gn) for gn in gene_name]
     else:
         gene_id = [adata.var_names.tolist().index(gene_name)]
@@ -144,7 +147,7 @@ def gene_patterns(
 
     if pattern_names is None:
         pattern_names = list(adata.uns["decipher"]["gene_patterns"].keys())
-    elif type(pattern_names) == str:
+    elif isinstance(pattern_names, str):
         pattern_names = [pattern_names]
 
     if ax is None:

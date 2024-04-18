@@ -8,7 +8,6 @@ import torch
 from matplotlib import pyplot as plt
 from pyro import poutine
 from pyro.infer import SVI, Trace_ELBO
-from pyro.optim import MultiStepLR
 from tqdm import tqdm
 
 from decipher.plot.decipher import decipher as plot_decipher_v
@@ -121,7 +120,6 @@ def decipher_train(
 
     decipher_config.initialize_from_adata(adata_train)
 
-    dataloader_train = make_data_loader_from_adata(adata_train, decipher_config.batch_size)
     dataloader_train = make_data_loader_from_adata(
         adata_train, decipher_config.batch_size, drop_last=True
     )
@@ -202,7 +200,7 @@ def decipher_train(
 
     model_run_id = adata.uns["decipher"]["run_id"]
     save_folder = DECIPHER_GLOBALS["save_folder"]
-    full_path = os.path.join(save_folder, model_run_id, "decipher_training.gif")
+    full_path = os.path.join(save_folder, str(model_run_id), "decipher_training.gif")
     gif_maker.save_gif(full_path)
 
     if is_notebook():
@@ -338,14 +336,18 @@ def decipher_and_gene_covariance(adata):
         gene_expression_imputed,
         y=adata.obsm["decipher_v"],
         rowvar=False,
-    )[: adata.X.shape[1], adata.X.shape[1]:]
-    logging.info("Added `.varm['decipher_v_gene_covariance']`: the covariance between Decipher v and each gene.")
+    )[: adata.X.shape[1], adata.X.shape[1] :]
+    logging.info(
+        "Added `.varm['decipher_v_gene_covariance']`: the covariance between Decipher v and each gene."
+    )
     adata.varm["decipher_z_gene_covariance"] = np.cov(
         gene_expression_imputed,
         y=adata.obsm["decipher_z"],
         rowvar=False,
-    )[: adata.X.shape[1], adata.X.shape[1]:]
-    logging.info("Added `.varm['decipher_z_gene_covariance']`: the covariance between Decipher z and each gene.")
+    )[: adata.X.shape[1], adata.X.shape[1] :]
+    logging.info(
+        "Added `.varm['decipher_z_gene_covariance']`: the covariance between Decipher z and each gene."
+    )
 
 
 def _decipher_to_adata(decipher, adata):
