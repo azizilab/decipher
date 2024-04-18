@@ -29,7 +29,7 @@ logging.basicConfig(
 )
 
 
-def predictive_log_likelihood(decipher, dataloader, n_samples=30):
+def predictive_log_likelihood(decipher, dataloader, n_samples=5):
     log_weights = []
     old_beta = decipher.config.beta
     decipher.config.beta = 1.0
@@ -155,6 +155,8 @@ def decipher_train(
         early_stopping = EarlyStopping(patience=int(1e30))
 
     pbar = tqdm(range(decipher_config.n_epochs))
+    last_train_elbo = np.nan
+    val_nll = np.nan
     for epoch in pbar:
         train_losses = []
         decipher.train()
@@ -166,6 +168,9 @@ def decipher_train(
                 if isinstance(module, torch.nn.BatchNorm1d):
                     module.eval()
 
+        n_batches = len(dataloader_train)
+        train_elbo = 0
+        train_elbo_n_obs = 0
         for xc in dataloader_train:
             try:
                 xc = [x.to(device) for x in xc]
@@ -174,14 +179,25 @@ def decipher_train(
                 print("ERROR", e)
                 return decipher, val_losses
             train_losses.append(loss)
+            train_elbo += loss
+            train_elbo_n_obs += xc[0].shape[0]
+            pbar.set_description(
+                f"Epoch {epoch} (batch {len(train_losses)}/{n_batches}) | "
+                f"| train elbo: {train_elbo / train_elbo_n_obs:.2f} (last epoch: {last_train_elbo:.2f}) | val ll:"
+                f" {val_nll:.2f}"
+            )
 
-        train_elbo = np.sum(train_losses) / len(dataloader_train.dataset)
         decipher.eval()
-        val_nll = -predictive_log_likelihood(decipher, dataloader_val)
+        val_nll = (
+            -predictive_log_likelihood(decipher, dataloader_val, n_samples=5) / adata_val.shape[0]
+        )
         val_losses.append(val_nll)
         pbar.set_description(
-            f"Epoch {epoch} | train elbo: {train_elbo:.2f} | val ll:" f" {val_nll:.2f}"
+            f"Epoch {epoch} (batch {len(train_losses)}/{n_batches}) | "
+            f"| train elbo: {train_elbo / train_elbo_n_obs:.2f} (last epoch: {last_train_elbo:.2f}) | val ll:"
+            f" {val_nll:.2f}"
         )
+        last_train_elbo = train_elbo / train_elbo_n_obs
         if early_stopping(val_nll):
             break
 
