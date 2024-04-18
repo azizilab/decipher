@@ -6,6 +6,7 @@ import pyro
 import scanpy as sc
 import torch
 from matplotlib import pyplot as plt
+import pyro.optim
 from pyro import poutine
 from pyro.infer import SVI, Trace_ELBO
 from tqdm import tqdm
@@ -70,6 +71,7 @@ def decipher_train(
     decipher_config=DecipherConfig(),
     plot_every_k_epochs=-1,
     plot_kwargs=None,
+    device="cpu",
 ):
     """Train a decipher model.
 
@@ -84,6 +86,8 @@ def decipher_train(
         Default: -1 (no plots).
     plot_kwargs: dict, optional
         Additional keyword arguments to pass to `dc.pl.decipher`.
+    device: str, optional
+        The device to use for training. Default: "cpu".
 
     Returns
     -------
@@ -128,6 +132,8 @@ def decipher_train(
     decipher = Decipher(
         config=decipher_config,
     )
+    decipher.to(device)
+
     optimizer = pyro.optim.ClippedAdam(
         {
             "lr": decipher_config.learning_rate,
@@ -161,7 +167,12 @@ def decipher_train(
                     module.eval()
 
         for xc in dataloader_train:
-            loss = svi.step(*xc)
+            try:
+                xc = [x.to(device) for x in xc]
+                loss = svi.step(*xc)
+            except Exception as e:
+                print("ERROR", e)
+                return decipher, val_losses
             train_losses.append(loss)
 
         train_elbo = np.sum(train_losses) / len(dataloader_train.dataset)
@@ -201,10 +212,10 @@ def decipher_train(
     model_run_id = adata.uns["decipher"]["run_id"]
     save_folder = DECIPHER_GLOBALS["save_folder"]
     full_path = os.path.join(save_folder, str(model_run_id), "decipher_training.gif")
-    gif_maker.save_gif(full_path)
-
-    if is_notebook():
-        load_and_show_gif(full_path)
+    if gif_maker.images:
+        gif_maker.save_gif(full_path)
+        if is_notebook():
+            load_and_show_gif(full_path)
 
     plot_decipher_v(adata, basis="decipher_v", **plot_kwargs)
 
