@@ -140,13 +140,13 @@ class Decipher(nn.Module):
             x = torch.log1p(x)
 
             z_loc, z_scale = self.encoder_x_to_z(x, context=context)
-            z_scale = softplus(z_scale)
+            z_scale = softplus(z_scale) + self._epsilon
             posterior_z = dist.Normal(z_loc, z_scale).to_event(1)
             z = pyro.sample("z", posterior_z)
 
             zx = torch.cat([z, x], dim=-1)
             v_loc, v_scale = self.encoder_zx_to_v(zx, context=context)
-            v_scale = softplus(v_scale)
+            v_scale = softplus(v_scale) + self._epsilon
             with poutine.scale(scale=self.config.beta):
                 if self.config.prior == "gamma":
                     posterior_v = dist.Gamma(softplus(v_loc), v_scale).to_event(1)
