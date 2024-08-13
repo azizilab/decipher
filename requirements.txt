@@ -1,0 +1,8 @@
+torch
+numpy
+pandas
+scipy
+scanpy
+leidenalg
+pyro-ppl
+randomname

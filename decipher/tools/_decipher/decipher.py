@@ -172,8 +172,11 @@ class Decipher(nn.Module):
         z : np.ndarray
             Decipher latent z of shape (n_cells, dim_z).
         """
+        # print(type(x))
         if type(x) == np.ndarray:
             x = torch.tensor(x, dtype=torch.float32)
+        else:
+            x = torch.from_numpy(x)
 
         x = torch.log1p(x)
         z_loc, _ = self.encoder_x_to_z(x)

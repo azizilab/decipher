@@ -1,6 +1,8 @@
 import numpy as np
 import scanpy as sc
 from matplotlib import pyplot as plt
+import matplotlib.colors as mcolors
+import plotly.graph_objects as go
 
 
 def decipher_z(
@@ -50,7 +52,6 @@ def decipher_z(
         return_fig=True,
         **kwargs,
     )
-
 
 def decipher(
     adata,
@@ -150,4 +151,74 @@ def decipher(
                 ax.set_xlabel(x_label)
             else:
                 ax.set_xlabel(None)
+    return fig
+
+def create_color_palette(cell_types, colormap='tab20'):
+    unique_types = np.unique(cell_types)
+    cmap = plt.get_cmap(colormap, len(unique_types))  # Get a matplotlib colormap
+    return {ctype: mcolors.to_hex(cmap(i)) for i, ctype in enumerate(unique_types)}
+
+def decipher_plot3d_plotly(
+    adata,
+    color=None,
+    palette=None,
+    subsample_frac=1.0,
+    title="",
+    basis="decipher_v",
+    x_label="Decipher 1",
+    y_label="Decipher 2",
+    z_label="Decipher 3",
+    figsize=(6, 6),  # Used for aspect ratio in Plotly
+    vmax=lambda xs: np.quantile(xs[~np.isnan(xs)], 0.99),
+    **kwargs
+):
+    """Plot the Decipher v space in 3D using Plotly.
+
+    Parameters are adapted for use with Plotly for interactive 3D visualization.
+    """
+    # Subsample the data
+    adata_subsampled = sc.pp.subsample(adata, subsample_frac, copy=True)
+    
+    # Get the coordinates for plotting
+    x = adata_subsampled.obsm[basis][:, 0]
+    y = adata_subsampled.obsm[basis][:, 1]
+    z = adata_subsampled.obsm[basis][:, 2]
+
+    cell_types = adata_subsampled.obs[color]
+    palette = create_color_palette(cell_types)
+    # Create the Plotly figure
+    fig = go.Figure()
+
+    for ctype in np.unique(cell_types):
+        idx = cell_types == ctype
+        fig.add_trace(go.Scatter3d(
+            x=x[idx],
+            y=y[idx],
+            z=z[idx],
+            mode='markers',
+            marker=dict(
+                size=5,
+                color=palette[ctype],  # Use specific color for each cell type
+                opacity=0.8
+            ),
+            name=ctype  # Legend entry
+        ))
+
+
+    # Update the layout to add labels, title, and modify the aspect ratio
+    fig.update_layout(
+        title=title,
+        scene=dict(
+            xaxis_title=x_label,
+            yaxis_title=y_label,
+            zaxis_title=z_label,
+            aspectmode='cube',  # This keeps the aspect ratio square
+            xaxis=dict(backgroundcolor="rgb(200, 200, 230)"),
+            yaxis=dict(backgroundcolor="rgb(230, 200, 230)"),
+            zaxis=dict(backgroundcolor="rgb(230, 230, 200)")
+        ),
+        width=600,  # Control width and height if needed
+        height=600
+    )
+
     return fig

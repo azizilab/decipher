@@ -20,6 +20,7 @@ logging.basicConfig(
 
 
 def get_dense_X(adata):
+    # print(type(adata))
     if isinstance(adata.X, np.ndarray):
         return adata.X
     else:

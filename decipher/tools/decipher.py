@@ -350,7 +350,7 @@ def decipher_gene_imputation(adata):
         The imputed gene expression.
     """
     decipher = decipher_load_model(adata)
-    imputed = decipher.impute_gene_expression_numpy(adata.X.toarray())
+    imputed = decipher.impute_gene_expression_numpy(adata.X) # adata.X.toarray() 
     adata.layers["decipher_imputed"] = imputed
     logging.info("Added `.layers['imputed']`: the Decipher imputed data.")
 
