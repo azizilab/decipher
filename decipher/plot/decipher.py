@@ -153,12 +153,13 @@ def decipher(
                 ax.set_xlabel(None)
     return fig
 
-def create_color_palette(cell_types, colormap='tab20'):
-    unique_types = np.unique(cell_types)
+def create_color_palette(colors, colormap='tab20'):
+    unique_types = np.unique(colors)
     cmap = plt.get_cmap(colormap, len(unique_types))  # Get a matplotlib colormap
     return {ctype: mcolors.to_hex(cmap(i)) for i, ctype in enumerate(unique_types)}
 
-def decipher_plot3d_plotly(
+
+def decipher3d(
     adata,
     color=None,
     palette=None,
@@ -168,6 +169,7 @@ def decipher_plot3d_plotly(
     x_label="Decipher 1",
     y_label="Decipher 2",
     z_label="Decipher 3",
+    plot_gene=True,
     figsize=(6, 6),  # Used for aspect ratio in Plotly
     vmax=lambda xs: np.quantile(xs[~np.isnan(xs)], 0.99),
     **kwargs
@@ -183,26 +185,44 @@ def decipher_plot3d_plotly(
     x = adata_subsampled.obsm[basis][:, 0]
     y = adata_subsampled.obsm[basis][:, 1]
     z = adata_subsampled.obsm[basis][:, 2]
-
-    cell_types = adata_subsampled.obs[color]
-    palette = create_color_palette(cell_types)
+    
     # Create the Plotly figure
     fig = go.Figure()
 
-    for ctype in np.unique(cell_types):
-        idx = cell_types == ctype
-        fig.add_trace(go.Scatter3d(
-            x=x[idx],
-            y=y[idx],
-            z=z[idx],
+    if plot_gene:
+        colors = adata_subsampled.to_df()[color]
+        # colors_scaled = (colors - colors.min()) / (colors.max() - colors.min())
+        # Create the Plotly figure
+        fig = go.Figure(data=[go.Scatter3d(
+            x=x,
+            y=y,
+            z=z,
             mode='markers',
             marker=dict(
                 size=5,
-                color=palette[ctype],  # Use specific color for each cell type
+                color=colors,  # Apply normalized colors
+                colorscale='Viridis',  # Use a colorscale suitable for continuous data
+                colorbar=dict(title=color),  # Add a colorbar with a title
                 opacity=0.8
-            ),
-            name=ctype  # Legend entry
-        ))
+            )
+        )])
+    else:
+        colors = adata_subsampled.obs[color]
+        palette = create_color_palette(colors)
+        for ctype in np.unique(colors):
+            idx = colors == ctype
+            fig.add_trace(go.Scatter3d(
+                x=x[idx],
+                y=y[idx],
+                z=z[idx],
+                mode='markers',
+                marker=dict(
+                    size=5,
+                    color=palette[ctype],  # Use specific color for each cell type
+                    opacity=0.8
+                ),
+                name=ctype  # Legend entry
+            ))
 
 
     # Update the layout to add labels, title, and modify the aspect ratio
