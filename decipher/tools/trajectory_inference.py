@@ -7,6 +7,7 @@ import pandas as pd
 import scanpy as sc
 import scipy.spatial
 import torch.nn.functional
+import elpigraph
 
 from decipher.tools._decipher.data import decipher_load_model
 from decipher.utils import create_decipher_uns_key
@@ -311,6 +312,8 @@ def trajectories(
     adata,
     *trajectory_configs,
     point_density=50,
+    eipi = True,
+    numnodes=15,
     cluster_key="decipher_clusters",
 ):
     """Compute the trajectories given some trajectory configurations.
@@ -341,6 +344,8 @@ def trajectories(
     """
     rep_key = "decipher_v"
     uns_key = "trajectories"
+    if eipi:
+        cluster_key = 'cell_type'
     create_decipher_uns_key(adata)
 
     for t_config in trajectory_configs:
@@ -358,6 +363,7 @@ def trajectories(
             adata_subset = adata
 
         cells_locations = pd.DataFrame(adata_subset.obsm[rep_key])
+        
         cells_locations["cluster_id"] = adata_subset.obs[cluster_key].values
 
         valid_clusters = (
@@ -366,29 +372,60 @@ def trajectories(
         cluster_locations = cells_locations.groupby("cluster_id").mean()
         cluster_locations = cluster_locations[valid_clusters]
 
-        if t_config.cluster_ids_list is not None:
+        if eipi:
+            cluster_locations = cluster_locations.loc[cluster_locations.index.isin(t_config.cluster_ids_list)].reindex(t_config.cluster_ids_list)
+            data = cluster_locations[[0, 1]].values  # Assuming cluster_locations is a DataFrame with x, y columns
+            
+            # Run ElPiGraph to compute the principal graph
+            curve = elpigraph.computeElasticPrincipalCurve(data, NumNodes=numnodes)
+            nodes, edges = curve[0]['NodePositions'], curve[0]['Edges']
+
             t_cluster_ids = t_config.cluster_ids_list
-        else:
+
             graph = nx.Graph()
             for i, (x, y) in cluster_locations[[0, 1]].iterrows():
                 graph.add_node(i, x=x, y=y, xy=np.array([x, y]))
 
-            distance_func = scipy.spatial.distance.euclidean
-            for n1, n2 in itertools.combinations(graph.nodes, r=2):
-                n1_data, n2_data = graph.nodes[n1], graph.nodes[n2]
-                distance = distance_func(n1_data["xy"], n2_data["xy"])
-                graph.add_edge(n1, n2, weight=distance)
-            tree = nx.minimum_spanning_tree(graph)
+            for edge in edges[0]:
+                graph.add_edge(edge[0], edge[1])
 
-            start_cluster_id = t_config.get_start_cluster_id(adata)
-            end_cluster_id = t_config.get_end_cluster_id(adata)
+            # Find the trajectory order by traversing the graph
+            # Assume the first node (node 0) is one end of the trajectory
+            start_node = 0
+            trajectory_order = list(nx.dfs_preorder_nodes(graph, source=start_node))
 
-            t_cluster_ids = nx.shortest_path(tree, start_cluster_id, end_cluster_id)
+            # Sort nodes by the trajectory order
+            nodes = nodes[trajectory_order]
 
-        logging.info(f"Trajectory {t_name} : {t_cluster_ids})")
-        t_cluster_locations = np.array(
-            [cluster_locations.loc[cluster_id, [0, 1]] for cluster_id in t_cluster_ids]
-        ).astype(np.float32)
+            logging.info(f"Trajectory {t_name}: {t_cluster_ids}")
+            t_cluster_locations = nodes.astype(np.float32)
+
+        else:
+            if t_config.cluster_ids_list is not None:
+                t_cluster_ids = t_config.cluster_ids_list
+            else:
+                graph = nx.Graph()
+                
+                for i, (x, y) in cluster_locations[[0, 1]].iterrows():
+                    graph.add_node(i, x=x, y=y, xy=np.array([x, y]))
+
+                distance_func = scipy.spatial.distance.euclidean
+                for n1, n2 in itertools.combinations(graph.nodes, r=2):
+                    n1_data, n2_data = graph.nodes[n1], graph.nodes[n2]
+                    distance = distance_func(n1_data["xy"], n2_data["xy"])
+                    graph.add_edge(n1, n2, weight=distance)
+                tree = nx.minimum_spanning_tree(graph)
+
+                start_cluster_id = t_config.get_start_cluster_id(adata)
+                end_cluster_id = t_config.get_end_cluster_id(adata)
+
+                t_cluster_ids = nx.shortest_path(tree, start_cluster_id, end_cluster_id)
+
+            logging.info(f"Trajectory {t_name} : {t_cluster_ids})")
+            t_cluster_locations = np.array(
+                [cluster_locations.loc[cluster_id, [0, 1]] for cluster_id in t_cluster_ids]
+            ).astype(np.float32)
+        
         trajectory = Trajectory(
             t_cluster_locations,
             t_cluster_ids,

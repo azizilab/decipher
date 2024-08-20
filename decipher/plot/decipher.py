@@ -65,6 +65,7 @@ def decipher(
     y_label="Decipher 2",
     axis_type="arrow",
     figsize=(3.5, 3.5),
+    marker_size = 3,
     vmax=lambda xs: np.quantile(xs[~np.isnan(xs)], 0.99),
     **kwargs,
 ):
@@ -171,6 +172,7 @@ def decipher3d(
     z_label="Decipher 3",
     plot_gene=True,
     figsize=(6, 6),  # Used for aspect ratio in Plotly
+    marker_size = 5,
     vmax=lambda xs: np.quantile(xs[~np.isnan(xs)], 0.99),
     **kwargs
 ):
@@ -199,7 +201,7 @@ def decipher3d(
             z=z,
             mode='markers',
             marker=dict(
-                size=5,
+                size=marker_size,
                 color=colors,  # Apply normalized colors
                 colorscale='Viridis',  # Use a colorscale suitable for continuous data
                 colorbar=dict(title=color),  # Add a colorbar with a title
@@ -217,7 +219,7 @@ def decipher3d(
                 z=z[idx],
                 mode='markers',
                 marker=dict(
-                    size=5,
+                    size=marker_size,
                     color=palette[ctype],  # Use specific color for each cell type
                     opacity=0.8
                 ),

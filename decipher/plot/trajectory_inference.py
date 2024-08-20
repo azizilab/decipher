@@ -5,6 +5,7 @@ import numpy as np
 import seaborn as sns
 from matplotlib import pyplot as plt
 from sklearn.neighbors import KNeighborsClassifier
+from scipy.spatial import distance_matrix
 
 from decipher.plot.decipher import decipher as plot_decipher_v
 
@@ -13,6 +14,7 @@ logging.basicConfig(
     format="%(asctime)s | %(levelname)s : %(message)s",
     level=logging.INFO,
 )
+
 
 
 def cell_clusters(adata, legend_loc="on data", legend_fontsize=10):
@@ -69,13 +71,15 @@ def trajectories(
             color = palette[t_name]
         else:
             color = default_color_palette[i]
+
         ax.plot(
             cluster_locations[:, 0],
             cluster_locations[:, 1],
             marker="o",
+            # linestyle='None',
             c=color,
             markerfacecolor=color,
-            markersize=7,
+            markersize=5,
             path_effects=[pe.Stroke(linewidth=3, foreground="black"), pe.Normal()],
         )
         ax.plot(
@@ -96,6 +100,7 @@ def gene_patterns(
     crop_to_min_length=False,
     smoothing_window=5,
     cell_type_key=None,
+    time_axis = "times",
     palette=None,
     pattern_names=None,
     figsize=(30, 20),
