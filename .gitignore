@@ -3,7 +3,7 @@ data*
 _decipher_models*
 experiments*
 wandb/
-plots*
+figures*
 
 
 # Byte-compiled / optimized / DLL files
