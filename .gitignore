@@ -4,6 +4,13 @@ _decipher_models*
 experiments*
 wandb/
 figures*
+ArchRLogs*
+HemeFragments*
+HemeTutorial*
+QualityControl*
+Save-ProjHeme1*
+tmp*
+
 
 
 # Byte-compiled / optimized / DLL files
@@ -57,6 +64,7 @@ htmlcov/
 .coverage
 .coverage.*
 .cache
+*.arrow
 nosetests.xml
 coverage.xml
 *.cover

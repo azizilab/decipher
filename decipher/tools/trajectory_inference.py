@@ -311,8 +311,8 @@ def find_cluster_with_marker(
 def trajectories(
     adata,
     *trajectory_configs,
+    eipi = False,
     point_density=50,
-    eipi = True,
     numnodes=15,
     cluster_key="decipher_clusters",
 ):
