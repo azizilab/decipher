@@ -66,6 +66,7 @@ def decipher(
     axis_type="arrow",
     figsize=(3.5, 3.5),
     marker_size = 3,
+    subset=None,
     vmax=lambda xs: np.quantile(xs[~np.isnan(xs)], 0.99),
     **kwargs,
 ):
@@ -116,8 +117,16 @@ def decipher(
 
     """
     with plt.rc_context({"figure.figsize": figsize}):
+        if subset:
+            # Create a new column 'custom_color' based on genotype to set 'p53 F/F' points to white
+            key = list(subset.keys())[0]
+            val = list(subset.values())[0]
+            adata.obs['alpha'] = adata.obs[key].apply(lambda x: 1 if val in x else 0)
+            print(adata.obs['alpha'].mean())
+            
         fig = sc.pl.embedding(
-            sc.pp.subsample(adata, subsample_frac, copy=True),
+            # sc.pp.subsample(adata, subsample_frac, copy=True),
+            adata if subsample_frac >= 1.0 else sc.pp.subsample(adata, subsample_frac, copy=True),
             basis=basis,
             color=color,
             palette=palette,
@@ -127,12 +136,33 @@ def decipher(
             vmax=vmax if color is not None else None,
             **kwargs,
         )
+
     ax = fig.axes[0]
     if color is None or isinstance(color, str):
         color = [color]
 
     if len(color) == 1:
         ax.set_title(title)
+    
+    for i, ax in enumerate(fig.axes):
+        # Skip the colorbar axis
+        if ax._label == "<colorbar>":
+            continue
+        
+        # Check if the axis contains a scatter plot collection
+        for coll in ax.collections:
+            
+            # Extract current colors (RGBA) of the scatter plot
+            facecolors = coll.get_facecolors()
+            # print(facecolors.shape)
+
+            # Update the alpha values based on adata.obs['alpha']
+            if len(facecolors) == len(adata.obs):
+                for j, alpha_value in enumerate(adata.obs['alpha']):
+                    facecolors[j, -1] = alpha_value  # Adjust the alpha channel (last value)
+
+            # Apply the updated colors back to the scatter plot
+            coll.set_facecolors(facecolors)
 
     for i, ax in enumerate(fig.axes):
         if ax._label == "<colorbar>":
@@ -143,6 +173,7 @@ def decipher(
             ax.plot(1, 0, ">k", transform=ax.transAxes, clip_on=False)
             ax.plot(0, 1, "^k", transform=ax.transAxes, clip_on=False)
 
+
         if axis_type != "none":
             if i % ncols == 0:
                 ax.set_ylabel(y_label)
@@ -152,6 +183,8 @@ def decipher(
                 ax.set_xlabel(x_label)
             else:
                 ax.set_xlabel(None)
+
+
     return fig
 
 def create_color_palette(colors, colormap='tab20'):
