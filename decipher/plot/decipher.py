@@ -165,18 +165,19 @@ def decipher(
                 ax.set_xlabel(None)
         
         # Check if the axis contains a scatter plot collection
-        for coll in ax.collections:
-            # Extract current colors (RGBA) of the scatter plot
-            facecolors = coll.get_facecolors()
-            # print(facecolors.shape)
+        if subset:    
+            for coll in ax.collections:
+                # Extract current colors (RGBA) of the scatter plot
+                facecolors = coll.get_facecolors()
+                # print(facecolors.shape)
 
-            # Update the alpha values based on adata.obs['alpha']
-            if len(facecolors) == len(adata.obs):
-                for j, alpha_value in enumerate(adata.obs['alpha']):
-                    facecolors[j, -1] = alpha_value  # Adjust the alpha channel (last value)
+                # Update the alpha values based on adata.obs['alpha']
+                if len(facecolors) == len(adata.obs):
+                    for j, alpha_value in enumerate(adata.obs['alpha']):
+                        facecolors[j, -1] = alpha_value  # Adjust the alpha channel (last value)
 
-            # Apply the updated colors back to the scatter plot
-            coll.set_facecolors(facecolors)
+                # Apply the updated colors back to the scatter plot
+                coll.set_facecolors(facecolors)
 
 
     return fig
