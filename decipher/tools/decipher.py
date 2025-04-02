@@ -4,6 +4,7 @@ import os
 import numpy as np
 import pyro
 import scanpy as sc
+import scipy
 import torch
 from matplotlib import pyplot as plt
 import pyro.optim
@@ -27,6 +28,21 @@ logging.basicConfig(
     format="%(asctime)s | %(levelname)s : %(message)s",
     level=logging.INFO,
 )
+
+
+def check_adata_has_integer_counts(adata):
+    """
+    Checks that the adata contains integer counts.
+    Converts the data to dense (not optimal, but it will be converted to dense anyway later).
+    """
+    counts = adata.X
+    if isinstance(counts, scipy.sparse.csr_matrix):
+        counts = counts.toarray()
+    if not np.allclose(counts, counts.astype(int)):
+        raise ValueError(
+            ".X must contain integer counts but it contains non-integer values.\nIf you have normalized data, "
+            "it is reasonable to multiply it by 10_000 and round it to the nearest integer."
+        )
 
 
 def predictive_log_likelihood(decipher, dataloader, n_samples=5):
@@ -102,6 +118,7 @@ def decipher_train(
     `adata.obsm['decipher_z']`: ndarray
         The decipher z space.
     """
+    check_adata_has_integer_counts(adata)
 
     if is_notebook() and plot_every_k_epochs == -1:
         plot_every_k_epochs = 5

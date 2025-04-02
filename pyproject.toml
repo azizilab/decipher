@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "scdecipher"
-version = "0.1.2"
+version = "0.1.3"
 description = "Decipher is a single-cell analysis package to integrate and compare perturbed samples to healthy samples, to identify the origin of the cell-states perturbations."
 authors = ["Achille Nazaret"]
 license = "MIT"
