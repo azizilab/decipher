@@ -112,7 +112,9 @@ class Decipher(nn.Module):
                 if self.config.prior == "normal":
                     prior = dist.Normal(0, x.new_ones(self.config.dim_v)).to_event(1)
                 elif self.config.prior == "gamma":
-                    prior = dist.Gamma(0.3, x.new_ones(self.config.dim_v) * 0.8).to_event(1)
+                    prior = dist.Gamma(
+                        0.3, x.new_ones(self.config.dim_v) * 0.8
+                    ).to_event(1)
                 else:
                     raise ValueError("Invalid prior, must be normal or gamma")
                 v = pyro.sample("v", prior)
@@ -131,7 +133,9 @@ class Decipher(nn.Module):
                 self.theta + self._epsilon
             )
             # noinspection PyUnresolvedReferences
-            x_dist = dist.NegativeBinomial(total_count=self.theta + self._epsilon, logits=logit)
+            x_dist = dist.NegativeBinomial(
+                total_count=self.theta + self._epsilon, logits=logit
+            )
             pyro.sample("x", x_dist.to_event(1), obs=x)
 
     def guide(self, x, context=None):
@@ -150,7 +154,10 @@ class Decipher(nn.Module):
             with poutine.scale(scale=self.config.beta):
                 if self.config.prior == "gamma":
                     posterior_v = dist.Gamma(softplus(v_loc), v_scale).to_event(1)
-                elif self.config.prior == "normal" or self.config.prior == "student-normal":
+                elif (
+                    self.config.prior == "normal"
+                    or self.config.prior == "student-normal"
+                ):
                     posterior_v = dist.Normal(v_loc, v_scale).to_event(1)
                 else:
                     raise ValueError("Invalid prior, must be normal or gamma")
@@ -173,17 +180,17 @@ class Decipher(nn.Module):
             Decipher latent z of shape (n_cells, dim_z).
         """
         if type(x) == np.ndarray:
-            x = torch.tensor(x, dtype=torch.float32)
+            x = torch.tensor(x, dtype=torch.float32, device=self.device)
 
         x = torch.log1p(x)
         z_loc, _ = self.encoder_x_to_z(x)
         zx = torch.cat([z_loc, x], dim=-1)
         v_loc, _ = self.encoder_zx_to_v(zx)
-        return v_loc.detach().numpy(), z_loc.detach().numpy()
+        return v_loc.detach().cpu().numpy(), z_loc.detach().cpu().numpy()
 
     def impute_gene_expression_numpy(self, x):
         if type(x) == np.ndarray:
-            x = torch.tensor(x, dtype=torch.float32)
+            x = torch.tensor(x, dtype=torch.float32, device=self.device)
         z_loc, _, _, _ = self.guide(x)
         mu = self.decoder_z_to_x(z_loc)
         mu = softmax(mu, dim=-1)

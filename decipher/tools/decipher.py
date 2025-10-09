@@ -3,11 +3,11 @@ import os
 
 import numpy as np
 import pyro
+import pyro.optim
 import scanpy as sc
 import scipy
 import torch
 from matplotlib import pyplot as plt
-import pyro.optim
 from pyro import poutine
 from pyro.infer import SVI, Trace_ELBO
 from tqdm import tqdm
@@ -17,8 +17,8 @@ from decipher.tools._decipher import Decipher, DecipherConfig
 from decipher.tools._decipher.data import (
     decipher_load_model,
     decipher_save_model,
-    make_data_loader_from_adata,
     get_dense_X,
+    make_data_loader_from_adata,
 )
 from decipher.tools.utils import EarlyStopping
 from decipher.utils import DECIPHER_GLOBALS, GIFMaker, is_notebook, load_and_show_gif
@@ -58,7 +58,9 @@ def predictive_log_likelihood(decipher, dataloader, n_samples=5):
                 model_trace = poutine.trace(
                     poutine.replay(decipher.model, trace=guide_trace)
                 ).get_trace(*xc)
-                total_log_prob += model_trace.log_prob_sum() - guide_trace.log_prob_sum()
+                total_log_prob += (
+                    model_trace.log_prob_sum() - guide_trace.log_prob_sum()
+                )
             log_weights.append(total_log_prob)
 
     finally:
@@ -206,7 +208,8 @@ def decipher_train(
 
         decipher.eval()
         val_nll = (
-            -predictive_log_likelihood(decipher, dataloader_val, n_samples=5) / adata_val.shape[0]
+            -predictive_log_likelihood(decipher, dataloader_val, n_samples=5)
+            / adata_val.shape[0]
         )
         val_losses.append(val_nll)
         pbar.set_description(
@@ -223,7 +226,7 @@ def decipher_train(
             plot_decipher_v(adata, basis="decipher_v", **plot_kwargs)
             gif_maker.add_image(plt.gcf())
             if is_notebook():
-                from IPython.core import display
+                from IPython.display import clear_output, display
 
                 display.clear_output(wait=True)
                 display.display(plt.gcf())
@@ -232,9 +235,9 @@ def decipher_train(
             plt.close()
 
     if is_notebook():
-        from IPython.core import display
+        from IPython.display import clear_output
 
-        display.clear_output()
+        clear_output()
         pbar.display()
 
     if early_stopping.has_stopped():
@@ -347,7 +350,9 @@ def decipher_rotate_space(
     if auto_flip_decipher_z:
         # flip each z to be correlated positively with the components
         dim_z = adata.obsm["decipher_z"].shape[1]
-        z_v_corr = np.corrcoef(adata.obsm["decipher_z"], y=adata.obsm["decipher_v"], rowvar=False)
+        z_v_corr = np.corrcoef(
+            adata.obsm["decipher_z"], y=adata.obsm["decipher_v"], rowvar=False
+        )
         z_sign_correction = np.sign(z_v_corr[:dim_z, dim_z:].sum(axis=1))
         adata.obsm["decipher_z_not_rotated"] = adata.obsm["decipher_z"].copy()
         adata.obsm["decipher_z"] = adata.obsm["decipher_z"] * z_sign_correction
