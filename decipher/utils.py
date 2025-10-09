@@ -57,8 +57,8 @@ class GIFMaker:
         """
         fig.set_dpi(self.dpi)
         fig.canvas.draw()
-        image = np.frombuffer(fig.canvas.tostring_rgb(), dtype="uint8")
-        image = image.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+        image = np.frombuffer(fig.canvas.buffer_rgba(), dtype="uint8")
+        image = image.reshape(fig.canvas.get_width_height()[::-1] + (4,))
         self.images.append(Image.fromarray(image))
 
     def save_gif(self, filename):
